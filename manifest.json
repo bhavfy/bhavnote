@@ -1,7 +1,7 @@
 {
   "name": "Bhavnote",
   "short_name": "Bhavnote",
-  "description": "Private studio notebook for an independent video editor \u2014 notes, ideas, YouTube store, editing lab and clients, saved on this device.",
+  "description": "Private studio notebook for an independent video editor — notes, YouTube store and clients, saved on this device.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -51,8 +51,8 @@
       ]
     },
     {
-      "name": "Ideas",
-      "url": "./#/ideas",
+      "name": "Notes",
+      "url": "./#/notes",
       "icons": [
         {
           "src": "icons/icon-192.png",
