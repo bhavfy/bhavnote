@@ -8,6 +8,12 @@
   var CFG_KEY = "bhavnote.ai", CHAT_KEY = "bhavnote.chat";
   var API = "https://generativelanguage.googleapis.com/v1beta";
   var FALLBACK_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"];
+  // order tried when the chosen model is overloaded (de-duplicated at call time)
+  var CHAIN = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];  // 2.x are closed to newer keys (404) — those are skipped fast, 3.5 is the one Google points new keys to
+  var DELAYS = [1000, 2500];          // backoff before attempt 2 and 3 on the same model
+  var MAX_ATTEMPTS = 3, TRY_TIMEOUT = 35000, TOTAL_BUDGET = 100000;
+  var SNAP_MAX = 9000;
+  var lastUsed = { model: "", fellBack: false, tries: 0 };
 
   /* ---------- config (kept out of the JSON backup on purpose) ---------- */
   function cfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY) || "{}") || {}; } catch (e) { return {}; } }
@@ -16,6 +22,10 @@
 
   /* ---------- model choice: ask Google which models this key can use, pick the newest stable Flash ---------- */
   function pickModel(models) {
+    // Stable first: the newest-numbered Flash (3.x) was picked before and kept answering "busy". Prefer proven GA models.
+    var ids = models.filter(function (m) { return (m.supportedGenerationMethods || []).indexOf("generateContent") > -1; }).map(function (m) { return String(m.name || "").replace(/^models\//, ""); });
+    var stable = ["gemini-flash-latest", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
+    for (var k = 0; k < stable.length; k++) if (ids.indexOf(stable[k]) > -1) return stable[k];
     var bad = /(lite|image|tts|live|audio|transcribe|embed|computer|robotics|thinking|exp|learnlm|gemma|aqa|vision|nano|banana|veo|imagen|translate)/i;
     var best = null, bestScore = -1;
     models.forEach(function (m) {
@@ -34,37 +44,119 @@
     });
   }
   function ensureModel(force) {
-    var c = cfg(); if (c.model && !force) return Promise.resolve(c.model);
-    return listModels(c.key).then(function (ms) { var m = pickModel(ms) || FALLBACK_MODELS[0]; setCfg({ model: m, modelCheckedAt: B.now() }); return m; })
-      .catch(function (e) { if (e.status === 400 || e.status === 403) throw e; var m = c.model || FALLBACK_MODELS[0]; setCfg({ model: m }); return m; });
+    var c = cfg(); if (c.model && !force && c.pickVer === 2) return Promise.resolve(c.model);
+    return listModels(c.key).then(function (ms) { buildExtras(ms); var m = pickModel(ms) || FALLBACK_MODELS[0]; setCfg({ model: m, preferred: m, pickVer: 2, dead: {}, extras: extras, modelCheckedAt: B.now() }); return m; })
+      .catch(function (e) { if (e.status === 400 || e.status === 403) throw e; var m = (c.pickVer === 2 && c.model) || FALLBACK_MODELS[0]; setCfg({ model: m, preferred: m, pickVer: 2 }); return m; });
   }
 
   /* ---------- Gemini call ---------- */
   function friendlyError(e) {
     if (!navigator.onLine) return "Internet nahi hai 📶 AI ko online hona padega. Baaki app offline chalta rahega.";
     var msg = String((e && e.message) || e || "");
+    var det = e && e.details ? "\n(details: " + String(e.details).slice(0, 450) + ")" : "";
+    if (e && e.allBusy) return "Google ke saare models abhi busy hain. 2-3 min baad try karo — key theek hai ✅" + det;
+    if (e && e.status === 429 && e.quota) return "Aaj ki free limit ya per-minute limit poori ho gayi ⏳ 1-2 minute baad try karo.";
     if (e && (e.status === 400 && /api key|API_KEY/i.test(msg))) return "API key galat lag rahi hai 🔑 Settings → Bhav AI mein dobara paste karo.";
     if (e && e.status === 403) return "Is key ko Gemini use karne ki permission nahi hai. aistudio.google.com se nayi key banao.";
     if (e && e.status === 429) return "Aaj ki free limit ya per-minute limit poori ho gayi ⏳ 1-2 minute baad try karo.";
-    if (e && e.status >= 500) return "Google ka server abhi busy hai, thodi der baad try karo.";
+    if (e && e.status >= 500) return "Google ka server abhi busy hai, thodi der baad try karo." + det;
     if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "Google tak connect nahi ho paaya. Internet check karo aur dobara try karo.";
     return "Kuch gadbad ho gayi: " + msg.slice(0, 160);
   }
-  function callGemini(body, retried) {
-    var c = cfg();
-    return ensureModel(false).then(function (model) {
-      return fetch(API + "/models/" + encodeURIComponent(model) + ":generateContent", {
-        method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": c.key }, body: JSON.stringify(body)
-      }).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (j) {
-          if (r.ok) return j;
-          var e = new Error((j.error && j.error.message) || ("HTTP " + r.status)); e.status = r.status; e.body = j;
-          if (!retried && (r.status === 404 || (r.status === 400 && /model/i.test(e.message) && !/api key/i.test(e.message)))) {
-            return ensureModel(true).then(function () { return callGemini(body, true); });
-          }
-          throw e;
-        });
+  function isQuota(status, msg) { return status === 429 && /quota|per day|per-day|perday|daily|billing|free.?tier/i.test(msg || ""); }
+  function isOverload(status, msg) { return status === 500 || status === 502 || status === 503 || status === 504 || (status === 429 && !isQuota(status, msg)); }
+  // one compact line per model: "model 503 first-60-chars-of-Google's-message (x3)"
+  function logFail(log, m, e) {
+    var txt = m + " " + (e.status || (e.timeout ? "timeout" : "net")) + (e.status ? " " + String(e.message || "").replace(/\s+/g, " ").slice(0, 60) : "");
+    var last = log.length - 1;
+    if (last >= 0 && log[last].txt === txt) log[last].n++; else log.push({ txt: txt, n: 1 });
+    log.toString = function () { return this.map(function (x) { return x.txt + (x.n > 1 ? " (x" + x.n + ")" : ""); }).join(" | "); };
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var extras = []; // other usable Flash models from the key's own model list (newest stable first), appended at the end of the chain
+  function buildExtras(models) {
+    var bad = /(lite|image|tts|live|audio|transcribe|embed|computer|robotics|thinking|exp|learnlm|gemma|aqa|vision|nano|banana|veo|imagen|translate|omni|preview)/i;
+    extras = models.filter(function (m) { return (m.supportedGenerationMethods || []).indexOf("generateContent") > -1; })
+      .map(function (m) { return String(m.name || "").replace(/^models\//, ""); })
+      .filter(function (id) { return /^gemini-\d/.test(id) && /flash/i.test(id) && !bad.test(id); })
+      .sort(function (x, y) { return parseFloat((y.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1]) - parseFloat((x.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1]); }).slice(0, 3);
+  }
+  function candidates(first) {
+    var c = cfg(), list = [first]; if (!extras.length && c.extras) extras = c.extras;
+    if (c.preferred && c.preferred !== first) list.push(c.preferred);
+    CHAIN.forEach(function (m) { list.push(m); });
+    extras.forEach(function (m) { list.push(m); });
+    list = list.filter(function (m, i) { return m && list.indexOf(m) === i; });
+    var dead = c.dead || {}, fresh = list.filter(function (m) { return !(dead[m] && Date.now() - dead[m] < 864e5); });  // 404'd in the last 24 h: skip
+    return fresh.length ? fresh : list;
+  }
+  function markDead(m) { var d = cfg().dead || {}; d[m] = Date.now(); setCfg({ dead: d }); }
+  // One HTTP try. Resolves { ok, json } or rejects with an Error carrying .status / .net / .timeout
+  function tryOnce(model, key, body) {
+    var ctl = typeof AbortController === "function" ? new AbortController() : null, timer = null;
+    var req = fetch(API + "/models/" + encodeURIComponent(model) + ":generateContent", {
+      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: ctl ? ctl.signal : undefined
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.ok) return j;
+        var e = new Error((j.error && j.error.message) || ("HTTP " + r.status)); e.status = r.status; e.body = j; throw e;
       });
+    }, function (err) { var e = new Error(ctl && ctl.signal.aborted ? "timeout" : String((err && err.message) || err)); e.net = true; e.timeout = !!(ctl && ctl.signal.aborted); throw e; });
+    if (!ctl) return req;
+    timer = setTimeout(function () { try { ctl.abort(); } catch (x) {} }, TRY_TIMEOUT);
+    return req.then(function (j) { clearTimeout(timer); return j; }, function (e) { clearTimeout(timer); throw e; });
+  }
+  /* Tries the chosen model up to 3 times (1s, 2.5s backoff) when Google is overloaded, then walks CHAIN.
+     opts.onProgress(text) is told what is happening so the chat can show it instead of silence. */
+  function callGemini(body, opts) {
+    opts = opts || {}; var say = opts.onProgress || function () {}; var t0 = Date.now(), c = cfg(), log = [], maxTry = opts.attempts || MAX_ATTEMPTS;
+    return ensureModel(false).then(function (first) {
+      var list = candidates(first), lastErr = null, busyCount = 0, skipped = 0, repicked = false;
+      lastUsed = { model: "", fellBack: false, tries: 0 };
+      // a fallback that was saved earlier is only trusted for 30 min, then the best model is tried first again
+      if (c.model && c.preferred && c.model !== c.preferred && Date.now() - (c.fallbackAt || 0) > 30 * 60000) list = candidates(c.preferred);
+      function model(i) {
+        if (i >= list.length) {
+          if (lastErr && lastErr.status === 404 && skipped === list.length && !repicked) { repicked = true; return ensureModel(true).then(function (m) { list = candidates(m); return model(0); }); }
+          if (busyCount && lastErr && !lastErr.net) lastErr.allBusy = true;
+          lastErr = lastErr || new Error("AI se jawab nahi mila"); lastErr.details = String(log);
+          // last resort when every model failed on the full request: one quick pass without the tool list (plain chat still works)
+          if (lastErr.allBusy && body.tools && !opts.lean) {
+            say("Simple mode try kar raha hoon…"); var lean = Object.assign({}, body); delete lean.tools; delete lean.toolConfig;
+            var firstErr = lastErr;
+            return callGemini(lean, { onProgress: say, lean: true, attempts: 1 }).then(function (j) { lastUsed.lean = true; return j; }, function () { throw firstErr; });
+          }
+          throw lastErr;
+        }
+        var m = list[i];
+        if (i > 0) say("Google busy hai, dusra model try kar raha hoon… (" + m + ")");
+        function attempt(n) {
+          lastUsed.tries++;
+          return tryOnce(m, c.key, body).then(function (j) {
+            lastUsed.model = m; lastUsed.fellBack = (m !== list[0]) || i > 0;
+            if (cfg().model !== m) setCfg({ model: m, fallbackAt: Date.now() });
+            return j;
+          }, function (e) {
+            lastErr = e; logFail(log, m, e);
+            if (e.net) {                       // no connection / timeout: other models will not help if the network is down
+              if (n < maxTry && navigator.onLine !== false && Date.now() - t0 < TOTAL_BUDGET) { say("Connection slow hai, dobara try kar raha hoon… (" + (n + 1) + "/" + maxTry + ")"); return sleep(DELAYS[n - 1] || 2500).then(function () { return attempt(n + 1); }); }
+              if (e.timeout && i + 1 < list.length && Date.now() - t0 < TOTAL_BUDGET) { busyCount++; return model(i + 1); }
+              e.details = String(log); throw e;
+            }
+            if (isQuota(e.status, e.message)) { e.quota = true; e.details = String(log); throw e; }   // real limit: do not hammer other models
+            if (e.status === 404 || (e.status === 400 && /model/i.test(e.message) && !/api key/i.test(e.message))) { skipped++; if (e.status === 404) markDead(m); return model(i + 1); }
+            if (isOverload(e.status, e.message)) {
+              busyCount++;
+              if (Date.now() - t0 > TOTAL_BUDGET) { e.allBusy = true; e.details = String(log); throw e; }
+              if (n < maxTry) { say("Google busy hai, dobara try kar raha hoon… (" + (n + 1) + "/" + maxTry + ")"); return sleep(DELAYS[n - 1] || 2500).then(function () { return attempt(n + 1); }); }
+              return model(i + 1);
+            }
+            e.details = String(log); throw e;                           // 400 bad key, 403, anything else: show it as it is
+          });
+        }
+        return attempt(1);
+      }
+      return model(0);
     });
   }
 
@@ -80,14 +172,21 @@
   function snapshot() {
     var db = B.db, today = B.ymd(new Date()), mk = B.monthKey(new Date());
     var t = B.paisa ? B.paisa.totals(mk) : {};
-    var clients = db.items.filter(function (i) { return i.type === "client"; }).map(function (c) { var o = compact(c); var p = B.clientPending(c.name).sum; if (p) o.pending = p; return o; });
-    var posts = db.items.filter(function (i) { return i.type === "post" && (!i.date || i.date >= B.addDays(-7)); }).sort(function (a, b) { return (a.date || "z") < (b.date || "z") ? -1 : 1; }).slice(0, 25).map(compact);
-    var money = db.items.filter(function (i) { return (i.type === "income" || i.type === "expense") && (i.status === "pending" || B.monthKey(i.date) === mk); }).slice(0, 40).map(compact);
-    var recent = db.items.filter(function (i) { return ["note", "video"].indexOf(i.type) > -1; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 25).map(compact);
+    var clientsAll = db.items.filter(function (i) { return i.type === "client"; }).map(function (c) { var o = compact(c); var p = B.clientPending(c.name).sum; if (p) o.pending = p; return o; });
+    var postsAll = db.items.filter(function (i) { return i.type === "post" && (!i.date || i.date >= B.addDays(-7)); }).sort(function (a, b) { return (a.date || "z") < (b.date || "z") ? -1 : 1; });
+    var moneyAll = db.items.filter(function (i) { return (i.type === "income" || i.type === "expense") && (i.status === "pending" || B.monthKey(i.date) === mk); });
+    var recentAll = db.items.filter(function (i) { return ["note", "video"].indexOf(i.type) > -1; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; });
     var counts = {}; db.items.forEach(function (i) { counts[i.type] = (counts[i.type] || 0) + 1; });
-    return JSON.stringify({ today: today, user: db.settings.displayName, studio: db.settings.studioName, monthly_goal: db.settings.goal || 0,
-      this_month: { month: mk, kamaya: t.income, kharcha: t.expense, bacha: t.saved, pending: t.pending }, counts: counts,
-      clients: clients, calendar: posts, money_this_month_and_pending: money, recent_notes_and_videos: recent });
+    // normal sizes first; if the JSON is still big (a lot of data), shrink the lists so requests stay small
+    var levels = [[60, 25, 40, 25], [30, 15, 20, 10], [15, 8, 10, 5], [8, 4, 5, 3]], out = "";
+    for (var k = 0; k < levels.length; k++) {
+      var L = levels[k];
+      out = JSON.stringify({ today: today, user: db.settings.displayName, studio: db.settings.studioName, monthly_goal: db.settings.goal || 0,
+        this_month: { month: mk, kamaya: t.income, kharcha: t.expense, bacha: t.saved, pending: t.pending }, counts: counts,
+        clients: clientsAll.slice(0, L[0]), calendar: postsAll.slice(0, L[1]).map(compact), money_this_month_and_pending: moneyAll.slice(0, L[2]).map(compact), recent_notes_and_videos: recentAll.slice(0, L[3]).map(compact) });
+      if (out.length <= SNAP_MAX) break;
+    }
+    return out;
   }
   function systemText() {
     return [
@@ -316,14 +415,26 @@
     push({ kind: "user", text: text, img: shown && shown.img, audio: shown && shown.audio });
     conv.push({ role: "user", parts: parts });
     setBusy(true, "Soch raha hoon…");
+    leanNoted = false;
     loop(0).catch(function (e) { push({ kind: "err", text: friendlyError(e) }); conv.pop(); }).then(function () { setBusy(false); saveChat(); });
+  }
+  var leanNoted = false;
+  // Keep each request small: only the newest image/voice note travels with the history, older ones become a short text mark.
+  function lighten(contents) {
+    var last = -1; contents.forEach(function (c, i) { if ((c.parts || []).some(function (p) { return p.inlineData; })) last = i; });
+    return contents.map(function (c, i) {
+      if (i === last || !(c.parts || []).some(function (p) { return p.inlineData; })) return c;
+      return { role: c.role, parts: c.parts.map(function (p) { return p.inlineData ? { text: "[pehle bheji hui image/voice note]" } : p; }) };
+    });
   }
   function loop(round) {
     if (round > 6) return Promise.resolve();
     var body = { systemInstruction: { parts: [{ text: systemText() }] }, contents: conv.slice(-24), tools: [{ functionDeclarations: TOOLS }], toolConfig: { functionCallingConfig: { mode: "AUTO" } }, generationConfig: { temperature: 0.6 } };
     // the history must start with a user turn that is not a function response
+    body.contents = lighten(body.contents);
     while (body.contents.length && (body.contents[0].role !== "user" || body.contents[0].parts.some(function (p) { return p.functionResponse; }))) body.contents.shift();
-    return callGemini(body).then(function (j) {
+    return callGemini(body, { onProgress: function (t) { setBusy(true, t); } }).then(function (j) {
+      if (lastUsed.lean && !leanNoted) { leanNoted = true; note("AI ne bina data-tools ke jawab diya (Google ke models abhi bhari hain) — abhi sirf baat kar sakta hoon, app mein changes baad mein."); }
       var cand = (j.candidates || [])[0];
       if (!cand || !cand.content) { var why = (j.promptFeedback && j.promptFeedback.blockReason) || (cand && cand.finishReason) || "empty"; throw new Error("AI ne jawab nahi diya (" + why + ")"); }
       var content = { role: "model", parts: cand.content.parts || [] }; conv.push(content);
@@ -384,7 +495,25 @@
       };
       mediaRec.start(); micState(true); B.toast("Recording… bolke dobara mic dabao");
       setTimeout(function () { if (mediaRec && mediaRec.state === "recording") mediaRec.stop(); }, 60000);
-    }).catch(function () { B.toast("Mic ki permission nahi mili"); });
+    }).catch(function (err) { micDenied(err); });
+  }
+  /* ---------- mic permission help ---------- */
+  var MIC_SETTINGS = "Phone Settings → Apps → Bhavnote → Permissions → Microphone → Allow karo, phir app band karke dobara kholo.";
+  function isDenied(err) { var n = err && (err.name || err.message || ""); return /NotAllowed|PermissionDenied|Security|denied|not-allowed/i.test(String(n)); }
+  function askMic() { // asks the browser/WebView for the mic and lets go of it straight away
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject({ name: "NotSupported" });
+    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) { st.getTracks().forEach(function (t) { t.stop(); }); return true; });
+  }
+  function micDenied(err) {
+    var msg;
+    if (err && err.name === "NotFoundError") msg = "Is phone mein mic nahi mila 🎙";
+    else if (err && err.name === "NotSupported") msg = "Is app mein mic support nahi mila. Chrome mein kholo ya type karo.";
+    else if (!isDenied(err)) msg = "Mic start nahi hua (" + String((err && (err.name || err.message)) || "error").slice(0, 60) + ")";
+    if (msg) { if (feed()) note(msg); else B.toast(msg); return; }
+    if (feed()) note("Mic ki permission nahi mili 🎙 'Allow mic' dabao, phir jo popup aaye usme Allow karo.", "Allow mic", function () {
+      askMic().then(function () { B.toast("Mic allow ho gaya ✅"); note("Mic allow ho gaya ✅ Ab mic button dabake bolo."); })
+        .catch(function (e2) { note(isDenied(e2) ? "Abhi bhi band hai. " + MIC_SETTINGS : "Mic start nahi hua. Dobara try karo."); });
+    }); else B.toast("Mic ki permission nahi mili. " + MIC_SETTINGS);
   }
   function stopVoice() { if (rec) { try { rec.stop(); } catch (e) {} } if (mediaRec && mediaRec.state === "recording") mediaRec.stop(); }
   function showAttach() {
@@ -451,13 +580,22 @@
   B.VIEWS.ai = { render: render, after: after };
 
   /* ---------- Settings panel ---------- */
+  // tiny call through the same retry/fallback path; shows which model answered
+  function runTest(st, okText) {
+    return ensureModel(false).then(function () {
+      return callGemini({ contents: [{ role: "user", parts: [{ text: "Sirf 'OK' likho." }] }] }, { onProgress: function (t) { st.textContent = t; } });
+    }).then(function () {
+      st.textContent = "✓ " + okText + " · jawab dene wala model: " + lastUsed.model + (lastUsed.fellBack ? " (pehla model busy tha, dusra chala)" : "");
+      B.toast("Bhav AI ready ✨");
+    }).catch(function (e) { st.textContent = friendlyError(e); });
+  }
   function mountSettings(slot) {
     if (!slot) return; var c = cfg();
     slot.innerHTML = '<section class="panel" aria-labelledby="aiH"><h2 id="aiH">' + icon("i-spark") + ' Bhav AI (free)</h2>' +
       '<p>Bhav AI tumhari apni <b>Google Gemini API key</b> se chalta hai — free hai, aur key sirf isi phone mein save hoti hai (backup file mein bhi nahi jaati).</p>' +
       '<ol class="steps"><li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> kholo, Google account se login karo</li><li><b>Create API key</b> / <b>Get API key</b> dabao</li><li>Key copy karo (AIza… se shuru hoti hai) aur neeche paste karke <b>Save</b> karo</li></ol>' +
       '<div class="field"><label for="aiKey">Gemini API key</label><div class="key-row"><input class="input" id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" value="' + esc(c.key || "") + '"><button type="button" class="icon-btn" id="aiShow" aria-label="Key dikhao">👁</button></div></div>' +
-      '<div class="actions"><button class="btn btn-primary" type="button" id="aiSave">Save & test</button>' + (c.key ? '<button class="btn btn-danger-ghost" type="button" id="aiRemove">Key hatao</button>' : "") + "</div>" +
+      '<div class="actions"><button class="btn btn-primary" type="button" id="aiSave">Save & test</button><button class="btn" type="button" id="aiTest">Test AI</button><button class="btn" type="button" id="aiMic">Mic check</button>' + (c.key ? '<button class="btn btn-danger-ghost" type="button" id="aiRemove">Key hatao</button>' : "") + "</div>" +
       '<p class="hint" id="aiStatus">' + (c.key ? "Key saved" + (c.model ? " · model: " + esc(c.model) : "") : "Abhi koi key nahi hai") + "</p></section>";
     $("#aiShow").addEventListener("click", function () { var k = $("#aiKey"); k.type = k.type === "password" ? "text" : "password"; });
     var rm = $("#aiRemove"); if (rm) rm.addEventListener("click", function () { setCfg({ key: "", model: "" }); B.toast("Key hata di"); B.render(); });
@@ -465,9 +603,17 @@
       var key = ($("#aiKey").value || "").trim(); var st = $("#aiStatus");
       if (!key) { st.textContent = "Key paste karo"; return; }
       setCfg({ key: key, model: "" }); st.textContent = "Check kar raha hoon…";
-      ensureModel(true).then(function (m) {
-        return callGemini({ contents: [{ role: "user", parts: [{ text: "Sirf 'OK' likho." }] }] }).then(function () { st.textContent = "✓ Key chal rahi hai · model: " + m; B.toast("Bhav AI ready ✨"); });
-      }).catch(function (e) { st.textContent = friendlyError(e); });
+      ensureModel(true).then(function () { return runTest(st, "Key chal rahi hai"); });
+    });
+    $("#aiTest").addEventListener("click", function () {
+      var st = $("#aiStatus"); if (!hasKey()) { st.textContent = "Pehle key paste karke Save karo"; return; }
+      var key = ($("#aiKey").value || "").trim(); if (key && key !== cfg().key) setCfg({ key: key, model: "", preferred: "", pickVer: 0 });
+      st.textContent = "Test kar raha hoon…"; runTest(st, "AI chal raha hai");
+    });
+    $("#aiMic").addEventListener("click", function () {
+      var st = $("#aiStatus"); st.textContent = "Mic check…";
+      askMic().then(function () { st.textContent = "✓ Mic allowed hai 🎙"; B.toast("Mic theek hai ✅"); })
+        .catch(function (e) { st.textContent = e && e.name === "NotFoundError" ? "Is phone mein mic nahi mila." : (isDenied(e) ? "Mic ki permission nahi mili. Phone ne popup dikhaya ho toh Allow dabao, dobara 'Mic check' dabao. Nahi aaye toh: " + MIC_SETTINGS : "Mic start nahi hua (" + String((e && (e.name || e.message)) || "error").slice(0, 60) + ")"); });
     });
   }
 
@@ -507,7 +653,7 @@
       }).catch(function (e) { if (st) st.textContent = manual ? friendlyError(e) : ""; });
   }
 
-  window.BNAI = { mountSettings: mountSettings, runTool: runTool, pickModel: pickModel, cfg: cfg, callGemini: callGemini, friendlyError: friendlyError, hasKey: hasKey,
+  window.BNAI = { mountSettings: mountSettings, runTool: runTool, pickModel: pickModel, cfg: cfg, callGemini: callGemini, friendlyError: friendlyError, lastUsed: function () { return lastUsed; }, _cfg: function (o) { if (o.delays) DELAYS = o.delays; if (o.timeout) TRY_TIMEOUT = o.timeout; }, snapshot: snapshot, lighten: lighten, hasKey: hasKey,
     listChats: listChats, openChat: openChat, deleteChat: deleteChat, newChat: newChat, md: md };
   window.BNReport = { mount: mountReport };
   loadChat();
