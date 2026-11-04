@@ -3,7 +3,7 @@
   "use strict";
 
   var KEY = "bhavnote.v1";
-  var ASSET_V = "20261104e";
+  var ASSET_V = "20261104f";
   var SCHEMA = 3;
 
   /* ---------------- types ---------------- */
@@ -386,12 +386,12 @@
   }
 
   /* ---------------- router ---------------- */
-  var ROUTES = ["dashboard", "notes", "calendar", "paisa", "sahayak", "youtube", "clients", "favorites", "settings", "history", "books"];
-  var VIEWS = {}; // routes provided by feature modules (paisa.js, calendar.js, ai.js = Sahayak)
-  function currentRoute() { var r = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; if (r === "ideas" || r === "lab") return "notes"; if (r === "ai") return "sahayak"; return ROUTES.indexOf(r) > -1 ? r : "dashboard"; }
-  var TITLES = { dashboard: "Bhavnote", notes: "Notes", calendar: "Content Calendar", paisa: "Paisa", sahayak: "Sahayak", history: "History", books: "Books", youtube: "YouTube Store", clients: "Clients", favorites: "Favorites", settings: "Settings" };
-  /* Heavy feature modules (Sahayak chat, History, Books) are loaded after the first paint, or right away when their route is opened. */
-  var MODS = { sahayak: "ai.js", history: "history.js", books: "books.js" }, modP = {};
+  var ROUTES = ["dashboard", "notes", "calendar", "paisa", "youtube", "clients", "favorites", "settings", "history", "books"];
+  var VIEWS = {}; // routes provided by feature modules (paisa.js, calendar.js, history.js, books.js)
+  function currentRoute() { var r = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; if (r === "ideas" || r === "lab") return "notes"; if (r === "ai" || r === "sahayak") return "dashboard"; return ROUTES.indexOf(r) > -1 ? r : "dashboard"; }
+  var TITLES = { dashboard: "Bhavnote", notes: "Notes", calendar: "Content Calendar", paisa: "Paisa", history: "History", books: "Books", youtube: "YouTube Store", clients: "Clients", favorites: "Favorites", settings: "Settings" };
+  /* Heavy feature modules (History, Books) are loaded after the first paint, or right away when their route is opened. */
+  var MODS = { history: "history.js", books: "books.js" }, modP = {};
   function loadMod(name) {
     if (modP[name]) return modP[name];
     modP[name] = new Promise(function (res) {
@@ -402,9 +402,10 @@
     });
     return modP[name];
   }
-  function loadAllMods() { return loadMod("sahayak").then(function () { return loadMod("history"); }).then(function () { return loadMod("books"); }); }
+  function loadAllMods() { return loadMod("history").then(function () { return loadMod("books"); }); }
   var lastRoute = null;
   function render() {
+    if (/^#\/?(ai|sahayak)(\?|$)/.test(location.hash || "")) { try { history.replaceState(null, "", location.pathname + location.search + "#/dashboard"); } catch (e) { location.hash = "#/dashboard"; } }
     ui.route = currentRoute();
     var v = $("#view");
     var r = ui.route;
@@ -459,7 +460,7 @@
       '</form></section>';
     h += todayPlan();
     var stats = [["client", "Clients", "#/clients", "i-users"], ["video", "Videos", "#/youtube", "i-play"], ["note", "Notes", "#/notes", "i-note"], ["fav", "Starred", "#/favorites", "i-star"]];
-    h += '<div class="more-links"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch, trash, chats</small></span></a></div>';
+    h += '<div class="more-links"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch aur trash</small></span></a></div>';
     h += '<div class="stats">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '">' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span></a>"; }).join("") + "</div>";
     var recent = db.items.filter(function (it) { return !it.archived; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 7);
     var due = db.items.filter(function (it) { return it.type === "client" && it.deadline && ["lead", "active", "review"].indexOf(it.status) > -1; })
@@ -1059,6 +1060,7 @@
   };
   // boot after the feature modules (loaded after this file) have registered their views
   document.addEventListener("DOMContentLoaded", function () {
+    try { localStorage.removeItem("bhavnote.ai"); } catch (e) {} /* leftover key from the removed helper */
     db = load();
     snapAll();
     render();

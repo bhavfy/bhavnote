@@ -415,67 +415,6 @@ dialog::backdrop{background:rgba(0,0,0,.66)}
 .action-row .btn{min-height:44px}
 @media (min-width:900px){.action-row{max-width:360px}}
 
-/* ---------- Sahayak (chat) ---------- */
-[data-route="sahayak"] main{padding-bottom:calc(190px + env(safe-area-inset-bottom))}
-.ai-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:10px 0 12px}
-.ai-head h1{font-weight:700;font-size:30px;line-height:1.08;margin:0;letter-spacing:-.035em}
-.ai-head .sub{color:var(--muted);margin:6px 0 0;font-size:14px}
-.chat-feed{display:flex;flex-direction:column;gap:10px;max-width:760px}
-.chat-empty .cm-label{margin-top:16px}
-.key-cta{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
-.quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.quick-btn{display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 12px;border-radius:16px;border:1px solid var(--hair);border-top-color:var(--edge);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));color:var(--text);font-size:13.5px;font-weight:600;text-align:left;min-width:0}
-.quick-btn .ic{color:var(--muted);flex:none}
-.quick-btn span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.quick-btn:active{transform:scale(.98)}
-.msg{max-width:88%;padding:10px 14px;border-radius:20px;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
-.msg p{margin:0}
-.msg.me{align-self:flex-end;background:#e9e9ee;color:#000;border-bottom-right-radius:6px}
-.msg.ai{align-self:flex-start;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.05));border:1px solid var(--hair);border-top-color:var(--edge);border-bottom-left-radius:6px}
-.msg.err{border-color:rgba(229,115,107,.35);color:#f3c1bc}
-.msg-img{display:block;max-width:180px;max-height:240px;border-radius:12px;margin-bottom:6px;object-fit:cover}
-.msg-tag{display:flex;align-items:center;gap:5px;font-weight:600;font-size:13px}
-.msg-tag .ic{width:15px;height:15px}
-.msg-note{align-self:flex-start;display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--muted);padding:2px 4px}
-.msg-note.done span{color:#a6dbb5}
-.msg-note.undone span{text-decoration:line-through;color:var(--faint)}
-.msg.confirm{align-self:flex-start;max-width:92%;background:#1d1d20;border:1px solid var(--hair2)}
-.cf-detail{margin-top:6px!important;color:var(--muted);font-size:13.5px}
-.cf-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
-.cf-actions .btn{min-height:38px}
-.msg.confirm.yes{opacity:.75}.msg.confirm.no{opacity:.5}
-.card-msg{max-width:94%}
-.cm-title{display:flex;align-items:center;gap:6px;font-weight:700;margin-bottom:6px!important}
-.cm-title .ic{width:16px;height:16px}
-.cm-label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 6px!important;font-size:12px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}
-.cm-body{color:var(--text);font-size:14.5px}
-.cm-pre{margin:0;white-space:pre-wrap;font:inherit;font-size:14px;color:var(--text);background:rgba(0,0,0,.25);padding:10px 12px;border-radius:12px;max-height:260px;overflow:auto}
-.cm-thumb{font-weight:800;font-size:18px;letter-spacing:-.02em}
-.tags-p{color:var(--muted)!important}
-.hook-list{display:flex;flex-direction:column;gap:6px}
-.hook{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);font-size:14px;cursor:pointer}
-.hook input{margin-top:3px;accent-color:#fff}
-.save-row .input{flex:1;min-width:130px;min-height:40px}
-.typing{display:flex;align-items:center;gap:8px;margin:10px 4px;color:var(--muted);font-size:13px}
-.dots3{display:inline-flex;gap:4px}
-.dots3 i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite ease-in-out;opacity:.3}
-.dots3 i:nth-child(2){animation-delay:.2s}.dots3 i:nth-child(3){animation-delay:.4s}
-@keyframes blink{50%{opacity:1}}
-.composer{position:fixed;left:12px;right:12px;max-width:640px;margin:0 auto;bottom:calc(84px + env(safe-area-inset-bottom));z-index:29;padding:6px;border-radius:26px;background:linear-gradient(180deg,#2a2a2f,#1f1f23);border:1px solid var(--hair);border-top-color:var(--edge);box-shadow:var(--glow),0 8px 20px rgba(0,0,0,.5)}
-@media (min-width:900px){.composer{left:310px;bottom:20px}[data-route="sahayak"] main{padding-bottom:120px}}
-.comp-row{display:flex;align-items:flex-end;gap:2px}
-.composer textarea{flex:1;min-width:0;resize:none;border:0;background:transparent;color:var(--text);font:inherit;font-size:16px;line-height:1.35;padding:9px 6px;max-height:140px;outline:none}
-.composer .icon-btn{width:40px;height:40px;flex:none}
-#chatMic.rec{background:#e5736b;color:#fff}
-.send-btn{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:0;background:#f5f5f7;color:#000;flex:none}
-.send-btn .ic{stroke-width:2.2}
-.send-btn:disabled{opacity:.4}
-.attach-prev{display:flex;align-items:center;gap:10px;padding:4px 4px 8px;font-size:13px;color:var(--muted)}
-.attach-prev img{width:44px;height:44px;object-fit:cover;border-radius:10px}
-.attach-prev span{flex:1}
-.steps{margin:0;padding-left:20px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:4px}
-.steps a{color:var(--text)}
-.key-row{display:flex;gap:6px}
 .panel h2 .ic{width:18px;height:18px;vertical-align:-3px}
 
 /* ---------- home quick links ---------- */
@@ -496,11 +435,9 @@ dialog::backdrop{background:rgba(0,0,0,.66)}
 div.list-item{cursor:default}
 .hist-side{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none}
 .hist-side small{font-size:11.5px;color:var(--faint);white-space:nowrap}
-.ai-tag{font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.14);color:var(--text)}
 .li-icon.act-delete{color:#f0a29c}.li-icon.act-create{color:#a6dbb5}.li-icon.act-restore{color:#a9cde6}
 .icon-btn.sm{width:34px;height:34px}
 .more-row{display:flex;justify-content:center;margin:14px 0}.more-row.left{justify-content:flex-start;margin:4px 0 10px}
-.chat-open{display:flex;flex-direction:column;min-width:0;flex:1}
 .trash-note{margin:0 4px 8px!important}
 /* ---------- books ---------- */
 .upload-box{display:flex;align-items:center;gap:14px;padding:18px;border-radius:var(--r2);border:1.5px dashed rgba(255,255,255,.22);background:rgba(255,255,255,.04);cursor:pointer;color:var(--text)}
@@ -729,7 +666,5 @@ body[data-route="notes"] .fab{display:grid}
 .bkr-chs .list-item{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text);padding:12px;border-radius:12px;font:inherit}
 @media (prefers-reduced-motion:reduce){.bkr{transition:none}}
 
-/* ---------------- sahayak (offline helper) + books spacing ---------------- */
-.msg .sah-row{width:100%;margin-top:6px;text-align:left}
-.msg.ai p+.sah-row{margin-top:8px}
+/* ---------------- books spacing ---------------- */
 #bookList{margin-top:16px}
