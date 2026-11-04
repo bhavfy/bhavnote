@@ -1,8 +1,8 @@
 /* Bhavnote service worker — offline app shell. */
-const VERSION = "3.0.0-20261104d";
-const CACHE = "bhavnote-v3-20261104d";
+const VERSION = "3.0.0-20261104e";
+const CACHE = "bhavnote-v3-20261104e";
 const THUMBS = "bhavnote-thumbs";
-const SHELL = ["./", "./index.html", "./styles.css?v=20261104d", "./app.js?v=20261104d", "./paisa.js?v=20261104d", "./calendar.js?v=20261104d", "./editor.js?v=20261104d", "./ai.js?v=20261104d", "./history.js?v=20261104d", "./books.js?v=20261104d", "./manifest.json",
+const SHELL = ["./", "./index.html", "./styles.css?v=20261104e", "./app.js?v=20261104e", "./paisa.js?v=20261104e", "./calendar.js?v=20261104e", "./editor.js?v=20261104e", "./ai.js?v=20261104e", "./history.js?v=20261104e", "./books.js?v=20261104e", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-192.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png"];
 
 self.addEventListener("install", (e) => {
@@ -25,7 +25,7 @@ self.addEventListener("fetch", (e) => {
     }));
     return;
   }
-  if (url.origin !== self.location.origin) return; // Gemini API calls and wa.me links go straight to the network
+  if (url.origin !== self.location.origin) return; // other sites (wa.me links, YouTube) go straight to the network
   // Pages: network first so GitHub edits show up, cache as fallback offline.
   if (req.mode === "navigate") {
     e.respondWith(fetch(req, { cache: "no-cache" }).then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put("./index.html", copy)); return r; })

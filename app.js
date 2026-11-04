@@ -3,7 +3,7 @@
   "use strict";
 
   var KEY = "bhavnote.v1";
-  var ASSET_V = "20261104d";
+  var ASSET_V = "20261104e";
   var SCHEMA = 3;
 
   /* ---------------- types ---------------- */
@@ -159,7 +159,7 @@
     catch (e) { toast("Couldn't save — device storage is full or blocked."); return false; }
   }
   function save() { persist(db); logDiff(); updateCounts(); }
-  /* ---------------- IndexedDB (history, trash, AI chats, books) ---------------- */
+  /* ---------------- IndexedDB (history, trash, chats, books) ---------------- */
   var IDB = (function () {
     var dbp = null;
     function open() {
@@ -386,12 +386,12 @@
   }
 
   /* ---------------- router ---------------- */
-  var ROUTES = ["dashboard", "notes", "calendar", "paisa", "ai", "youtube", "clients", "favorites", "settings", "history", "books"];
-  var VIEWS = {}; // routes provided by feature modules (paisa.js, calendar.js, ai.js)
-  function currentRoute() { var r = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; if (r === "ideas" || r === "lab") return "notes"; return ROUTES.indexOf(r) > -1 ? r : "dashboard"; }
-  var TITLES = { dashboard: "Bhavnote", notes: "Notes", calendar: "Content Calendar", paisa: "Paisa", ai: "Bhav AI", history: "History", books: "Books", youtube: "YouTube Store", clients: "Clients", favorites: "Favorites", settings: "Settings" };
-  /* Heavy feature modules (AI chat, History, Books) are loaded after the first paint, or right away when their route is opened. */
-  var MODS = { ai: "ai.js", history: "history.js", books: "books.js" }, modP = {};
+  var ROUTES = ["dashboard", "notes", "calendar", "paisa", "sahayak", "youtube", "clients", "favorites", "settings", "history", "books"];
+  var VIEWS = {}; // routes provided by feature modules (paisa.js, calendar.js, ai.js = Sahayak)
+  function currentRoute() { var r = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; if (r === "ideas" || r === "lab") return "notes"; if (r === "ai") return "sahayak"; return ROUTES.indexOf(r) > -1 ? r : "dashboard"; }
+  var TITLES = { dashboard: "Bhavnote", notes: "Notes", calendar: "Content Calendar", paisa: "Paisa", sahayak: "Sahayak", history: "History", books: "Books", youtube: "YouTube Store", clients: "Clients", favorites: "Favorites", settings: "Settings" };
+  /* Heavy feature modules (Sahayak chat, History, Books) are loaded after the first paint, or right away when their route is opened. */
+  var MODS = { sahayak: "ai.js", history: "history.js", books: "books.js" }, modP = {};
   function loadMod(name) {
     if (modP[name]) return modP[name];
     modP[name] = new Promise(function (res) {
@@ -402,7 +402,7 @@
     });
     return modP[name];
   }
-  function loadAllMods() { return loadMod("ai").then(function () { return loadMod("history"); }).then(function () { return loadMod("books"); }); }
+  function loadAllMods() { return loadMod("sahayak").then(function () { return loadMod("history"); }).then(function () { return loadMod("books"); }); }
   var lastRoute = null;
   function render() {
     ui.route = currentRoute();
@@ -459,7 +459,7 @@
       '</form></section>';
     h += todayPlan();
     var stats = [["client", "Clients", "#/clients", "i-users"], ["video", "Videos", "#/youtube", "i-play"], ["note", "Notes", "#/notes", "i-note"], ["fav", "Starred", "#/favorites", "i-star"]];
-    h += '<div class="more-links"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch, trash, AI chats</small></span></a></div>';
+    h += '<div class="more-links"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch, trash, chats</small></span></a></div>';
     h += '<div class="stats">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '">' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span></a>"; }).join("") + "</div>";
     var recent = db.items.filter(function (it) { return !it.archived; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 7);
     var due = db.items.filter(function (it) { return it.type === "client" && it.deadline && ["lead", "active", "review"].indexOf(it.status) > -1; })
@@ -689,7 +689,6 @@
       '<div class="actions"><button class="btn" type="button" id="exportBtn">' + icon("i-download") + 'Export backup (JSON)</button>' +
       '<button class="btn" type="button" id="importBtn">' + icon("i-upload") + 'Import backup</button>' +
       '<input type="file" id="importFile" accept="application/json,.json" hidden></div></section>';
-    h += '<div id="aiSettingsSlot"></div>';
     h += '<section class="panel" aria-labelledby="sH"><h2 id="sH">Sample data</h2>' +
       '<p>' + (samples ? samples + " sample entries are still here. Removing them keeps everything you created — and any sample you edited." : "No sample entries left. Your own entries are all that's here.") + "</p>" +
       '<div class="actions"><button class="btn btn-danger" type="button" id="removeSamples"' + (samples ? "" : " disabled") + ">" + icon("i-trash") + "Remove sample data</button></div></section>";
@@ -973,8 +972,6 @@
   var nameTimer;
   function afterRender(r) {
     if (r === "settings") {
-      var mountAI = function () { var slot = $("#aiSettingsSlot"); if (window.BNAI && slot && currentRoute() === "settings") { try { window.BNAI.mountSettings(slot); } catch (e) { console.warn(e); } } };
-      if (window.BNAI) mountAI(); else loadMod("ai").then(mountAI);
       var sn = $("#savedNote");
       ["sName", "sStudio"].forEach(function (id) {
         $("#" + id).addEventListener("input", function () {
