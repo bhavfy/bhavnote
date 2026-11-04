@@ -6,7 +6,7 @@
   var GREYS = ["#f5f5f7", "#c7c7cc", "#9a9aa0", "#7c7c82", "#5f5f65", "#48484c", "#38383b"];
   function curMonth() { if (!B.ui.month) B.ui.month = B.monthKey(new Date()); return B.ui.month; }
   function shiftMonth(mk, d) { var p = mk.split("-"); var dt = new Date(+p[0], +p[1] - 1 + d, 1); return B.monthKey(dt); }
-  function monthLabel(mk, short) { var p = mk.split("-"); return new Date(+p[0], +p[1] - 1, 1).toLocaleDateString("en-IN", short ? { month: "short" } : { month: "long", year: "numeric" }); }
+  function monthLabel(mk, short) { var p = mk.split("-"); return short ? B.MON[+p[1] - 1] : B.MONTHS[+p[1] - 1] + " " + p[0]; }
   function amt(it) { return +it.amount || 0; }
   function totals(mk) {
     var t = { income: 0, expense: 0, pending: 0, cats: {}, count: 0 };

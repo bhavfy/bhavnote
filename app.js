@@ -3,6 +3,7 @@
   "use strict";
 
   var KEY = "bhavnote.v1";
+  var ASSET_V = "20261104c";
   var SCHEMA = 3;
 
   /* ---------------- types ---------------- */
@@ -24,6 +25,7 @@
   var RATE_UNITS = ["project", "video", "month", "day", "hour"];
 
   /* ---------------- helpers ---------------- */
+  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"], MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -56,7 +58,7 @@
     if (d < 3600) return Math.floor(d / 60) + "m ago";
     if (d < 86400) return Math.floor(d / 3600) + "h ago";
     if (d < 86400 * 7) return Math.floor(d / 86400) + "d ago";
-    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    var dd = new Date(iso); return dd.getDate() + " " + MON[dd.getMonth()];
   }
   function ymd(date) { var d = new Date(date); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   function addDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return ymd(d); }
@@ -65,8 +67,9 @@
     var t = new Date(+p[0], +p[1] - 1, +p[2]); var n = new Date(); n.setHours(0, 0, 0, 0);
     return Math.round((t - n) / 86400000);
   }
-  function fmtDate(s) { var p = String(s || "").split("-"); if (p.length !== 3) return ""; return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
-  var INR = (function () { try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }); } catch (e) { return { format: function (n) { return "₹" + n; } }; } })();
+  function fmtDate(s) { var p = String(s || "").split("-"); if (p.length !== 3) return ""; return (+p[2]) + " " + MON[+p[1] - 1] + " " + p[0]; }
+  /* Hand-rolled Indian grouping (₹1,23,456): the Intl formatter costs ~40 ms of start-up on a mid-range phone. */
+  var INR = { format: function (n) { n = Math.round(+n || 0); var neg = n < 0 ? "-" : ""; var s = String(Math.abs(n)), last = s.slice(-3), rest = s.slice(0, -3); if (rest) { last = "," + last; rest = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ","); } return neg + "₹" + rest + last; } };
   function fmtRate(it) { if (it.rate === "" || it.rate == null || isNaN(+it.rate)) return ""; return INR.format(+it.rate) + (it.rateUnit ? " / " + it.rateUnit : ""); }
   function ytId(url) {
     if (!url) return null;
@@ -386,23 +389,44 @@
   var ROUTES = ["dashboard", "notes", "calendar", "paisa", "ai", "youtube", "clients", "favorites", "settings", "history", "books"];
   var VIEWS = {}; // routes provided by feature modules (paisa.js, calendar.js, ai.js)
   function currentRoute() { var r = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; if (r === "ideas" || r === "lab") return "notes"; return ROUTES.indexOf(r) > -1 ? r : "dashboard"; }
+  var TITLES = { dashboard: "Bhavnote", notes: "Notes", calendar: "Content Calendar", paisa: "Paisa", ai: "Bhav AI", history: "History", books: "Books", youtube: "YouTube Store", clients: "Clients", favorites: "Favorites", settings: "Settings" };
+  /* Heavy feature modules (AI chat, History, Books) are loaded after the first paint, or right away when their route is opened. */
+  var MODS = { ai: "ai.js", history: "history.js", books: "books.js" }, modP = {};
+  function loadMod(name) {
+    if (modP[name]) return modP[name];
+    modP[name] = new Promise(function (res) {
+      var el = document.createElement("script"); el.src = MODS[name] + "?v=" + ASSET_V; el.async = true;
+      el.onload = function () { res(true); };
+      el.onerror = function () { delete modP[name]; res(false); toast("Ye part load nahi hua — internet check karo"); };
+      document.head.appendChild(el);
+    });
+    return modP[name];
+  }
+  function loadAllMods() { return loadMod("ai").then(function () { return loadMod("history"); }).then(function () { return loadMod("books"); }); }
+  var lastRoute = null;
   function render() {
     ui.route = currentRoute();
     var v = $("#view");
     var r = ui.route;
     document.body.setAttribute("data-route", r);
+    $("#topTitle").textContent = TITLES[r];
+    document.title = (r === "dashboard" ? "Bhavnote · Studio notebook" : TITLES[r] + " · Bhavnote");
+    $$("[data-route]").forEach(function (a) { if (a.getAttribute("data-route") === r) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    if (MODS[r] && !VIEWS[r]) {
+      v.innerHTML = '<div class="page-head"><div><h1>' + esc(TITLES[r]) + '</h1><p class="sub">Loading…</p></div></div><div class="skel"></div><div class="skel"></div>';
+      loadAllMods().then(function () { if (currentRoute() === r && VIEWS[r]) render(); });
+      return;
+    }
     if (VIEWS[r]) v.innerHTML = VIEWS[r].render();
     else if (r === "dashboard") v.innerHTML = viewDashboard();
     else if (r === "settings") v.innerHTML = viewSettings();
     else if (r === "favorites") v.innerHTML = viewList("favorites");
     else v.innerHTML = viewList(r);
-    $$("[data-route]").forEach(function (a) { if (a.getAttribute("data-route") === r) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-    var titles = { dashboard: "Bhavnote", notes: "Notes", calendar: "Content Calendar", paisa: "Paisa", ai: "Bhav AI", history: "History", books: "Books", youtube: "YouTube Store", clients: "Clients", favorites: "Favorites", settings: "Settings" };
-    $("#topTitle").textContent = titles[r];
-    document.title = (r === "dashboard" ? "Bhavnote · Studio notebook" : titles[r] + " · Bhavnote");
     updateCounts();
     afterRender(r);
     if (VIEWS[r] && VIEWS[r].after) VIEWS[r].after();
+    if (lastRoute !== null && lastRoute !== r && v.animate) v.animate([{ opacity: 0, transform: "translate3d(0,10px,0)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+    lastRoute = r;
   }
   function updateCounts() {
     var c = counts();
@@ -411,7 +435,7 @@
   }
   function counts() {
     var c = { note: 0, video: 0, client: 0, fav: 0 };
-    db.items.forEach(function (it) { if (c[it.type] != null) c[it.type]++; if (it.fav) c.fav++; });
+    db.items.forEach(function (it) { if (it.archived && it.type === "note") return; if (c[it.type] != null) c[it.type]++; if (it.fav) c.fav++; });
     return c;
   }
 
@@ -420,7 +444,7 @@
   function viewDashboard() {
     var c = counts();
     var name = db.settings.displayName ? ", <em>" + esc(db.settings.displayName) + "</em>" : "";
-    var date = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
+    var dn = new Date(), date = DAYS[dn.getDay()] + ", " + dn.getDate() + " " + MONTHS[dn.getMonth()];
     var modes = [["note", "Note"], ["video", "YouTube link"]];
     var h = '<section class="hero" aria-labelledby="greet">' +
       '<p class="date">' + esc(date) + '</p>' +
@@ -434,11 +458,10 @@
       '<button class="btn btn-primary" type="submit" aria-label="Save capture">' + icon("i-arrow") + '</button></div>' +
       '</form></section>';
     h += todayPlan();
-    h += '<div id="reportSlot"></div>';
     var stats = [["client", "Clients", "#/clients", "i-users"], ["video", "Videos", "#/youtube", "i-play"], ["note", "Notes", "#/notes", "i-note"], ["fav", "Starred", "#/favorites", "i-star"]];
     h += '<div class="more-links"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>PDF → Hinglish</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch, trash, AI chats</small></span></a></div>';
     h += '<div class="stats">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '">' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span></a>"; }).join("") + "</div>";
-    var recent = db.items.slice().sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 7);
+    var recent = db.items.filter(function (it) { return !it.archived; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 7);
     var due = db.items.filter(function (it) { return it.type === "client" && it.deadline && ["lead", "active", "review"].indexOf(it.status) > -1; })
       .sort(function (a, b) { return a.deadline < b.deadline ? -1 : 1; }).slice(0, 4);
     h += '<div class="dash-cols"><section aria-labelledby="recentH"><div class="section-label"><h2 id="recentH">Recent</h2></div>';
@@ -503,6 +526,7 @@
     var type = ROUTE_TYPE[route];
     var T = type ? TYPES[type] : null;
     var all = route === "favorites" ? db.items.filter(function (i) { return i.fav; }) : db.items.filter(function (i) { return i.type === type; });
+    var archN = 0; if (route === "notes") { archN = all.filter(function (i) { return i.archived; }).length; all = all.filter(function (i) { return !i.archived; }); }
     var title = route === "favorites" ? "Favorites" : T.label;
     var sub = {
       notes: "Ideas, techniques, styles and references, all in one place.",
@@ -520,7 +544,8 @@
     } else {
       chipsHtml = '<button class="chip" type="button" data-fopt="all" aria-pressed="' + (f.opt === "all") + '">All <span class="n">' + all.length + "</span></button>" +
         T.opts.map(function (o) { var n = all.filter(function (i) { return optOf(i) === o; }).length; return '<button class="chip" type="button" data-fopt="' + o + '" aria-pressed="' + (f.opt === o) + '">' + o + ' <span class="n">' + n + "</span></button>"; }).join("") +
-        '<button class="chip star" type="button" data-ffav aria-pressed="' + f.fav + '">' + icon("i-star") + "Starred</button>";
+        '<button class="chip star" type="button" data-ffav aria-pressed="' + f.fav + '">' + icon("i-star") + "Starred</button>" +
+        (route === "notes" ? '<button class="chip" type="button" data-farch aria-pressed="' + !!f.archived + '">' + icon("i-archive") + 'Archive <span class="n">' + archN + "</span></button>" : "");
     }
     var sorts = [["recent", "Recent"], ["az", "A–Z"]]; if (route === "clients") sorts.unshift(["deadline", "Deadline"]);
     h += '<div class="toolbar"><div class="toolbar-row"><div class="filter-search">' + icon("i-search") +
@@ -537,6 +562,7 @@
     if (route === "favorites" && f.type !== "all") arr = arr.filter(function (i) { return i.type === f.type; });
     if (route !== "favorites" && f.opt !== "all") arr = arr.filter(function (i) { return optOf(i) === f.opt; });
     if (f.fav) arr = arr.filter(function (i) { return i.fav; });
+    if (route === "notes") arr = arr.filter(function (i) { return f.archived ? !!i.archived : !i.archived; });
     if (f.q) { var q = f.q.toLowerCase(); arr = arr.filter(function (i) { return haystack(i).indexOf(q) > -1; }); }
     arr = arr.slice();
     if (f.sort === "az") arr.sort(function (a, b) { return titleOf(a).localeCompare(titleOf(b)); });
@@ -545,22 +571,72 @@
       if (ao !== bo) return ao - bo; return (a.deadline || "9999") < (b.deadline || "9999") ? -1 : 1;
     });
     else arr.sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; });
+    if (route === "notes" && !f.archived) { var pin = [], rest = []; arr.forEach(function (i) { (i.pinned ? pin : rest).push(i); }); arr = pin.concat(rest); }
     return arr;
+  }
+  /* Long lists render in chunks: the first screenful at once, the rest as you scroll (keeps DOM small and taps instant). */
+  var CHUNK = 24, more = { arr: [], i: 0, sec: "", obs: null };
+  function chunkHtml(route, n) {
+    var out = "", arr = more.arr, end = Math.min(arr.length, more.i + n);
+    for (; more.i < end; more.i++) {
+      var it = arr[more.i];
+      if (route === "notes" && !filt("notes").archived) {
+        var sec = it.pinned ? "p" : "o";
+        if (sec !== more.sec) { if (sec === "p") out += '<p class="grid-label">Pinned</p>'; else if (more.sec === "p") out += '<p class="grid-label">Others</p>'; more.sec = sec; }
+      }
+      out += card(it);
+    }
+    return out;
+  }
+  function armMore() {
+    if (more.obs) { more.obs.disconnect(); more.obs = null; }
+    var s = $("#moreS"); if (!s) return;
+    if (!("IntersectionObserver" in window)) { var g0 = $("#gridList"); if (g0) g0.insertAdjacentHTML("beforeend", chunkHtml(ui.route, 1e9)); s.remove(); return; }
+    more.obs = new IntersectionObserver(function (es) {
+      if (!es[0].isIntersecting) return;
+      var g = $("#gridList"); if (!g) return;
+      g.insertAdjacentHTML("beforeend", chunkHtml(ui.route, CHUNK));
+      if (more.i >= more.arr.length) { more.obs.disconnect(); more.obs = null; s.remove(); }
+      else { more.obs.unobserve(s); more.obs.observe(s); }
+    }, { rootMargin: "1000px 0px" });
+    more.obs.observe(s);
   }
   function resultsHtml(route) {
     var arr = filtered(route); var f = filt(route); var type = ROUTE_TYPE[route];
     if (!arr.length) {
-      var any = f.q || f.opt !== "all" || f.fav || f.type !== "all";
-      if (any) return emptyBox("No matches", "Try another filter or clear the search.", null);
+      var any = f.q || f.opt !== "all" || f.fav || f.type !== "all" || f.archived;
+      if (any) return emptyBox(f.archived && !f.q ? "No archived notes" : "No matches", f.archived && !f.q ? "Archive a note from its top bar and it will show up here." : "Try another filter or clear the search.", null);
       if (route === "favorites") return emptyBox("No favorites yet", "Tap the ☆ on anything to keep it here.", null);
       return emptyBox("No " + TYPES[type].label.toLowerCase() + " yet", "Create your first one.", type);
     }
-    return '<div class="grid">' + arr.map(card).join("") + "</div>";
+    more.arr = arr; more.i = 0; more.sec = "";
+    var first = chunkHtml(route, CHUNK);
+    return '<div class="' + (route === "notes" ? "grid notes-grid" : "grid") + '" id="gridList">' + first + "</div>" + (more.i < arr.length ? '<div class="more-sentinel" id="moreS" aria-hidden="true"></div>' : "");
   }
   function emptyBox(t, p, type) {
     return '<div class="empty"><h3>' + esc(t) + "</h3><p>" + esc(p) + "</p>" + (type ? '<button class="btn btn-primary" type="button" data-new="' + type + '">' + icon("i-plus") + "New " + esc(TYPES[type].one.toLowerCase()) + "</button>" : "") + "</div>";
   }
+  function mdPlain(t) {
+    return String(t || "").replace(/^[ \t]{0,3}#{1,3}[ \t]+/gm, "").replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?:;]|$)/g, "$1$2").replace(/^([ \t]*)[-*][ \t]+/gm, "$1• ").replace(/\n{3,}/g, "\n\n");
+  }
+  function noteCard(it) {
+    var raw = String(it.body || "").slice(0, 600), title = (it.title || "").trim(), lines = raw.split("\n");
+    if (!title) { while (lines.length && !lines[0].trim()) lines.shift(); title = mdPlain(lines.shift() || "").trim().slice(0, 120) || "Untitled"; }
+    var ex = mdPlain(lines.join("\n")).trim();
+    var h = '<article class="card ncard' + (it.color ? " nc-" + esc(it.color) : "") + '" aria-label="' + esc("Note: " + title) + '">';
+    if (it.pinned) h += '<span class="n-pin" role="img" aria-label="Pinned">' + icon("i-pin") + "</span>";
+    h += '<h3><button type="button" data-open="' + esc(it.id) + '">' + esc(title) + "</button></h3>";
+    if (ex) h += '<p class="excerpt">' + esc(ex) + "</p>";
+    if (it.tags && it.tags.length) h += '<div class="tags">' + it.tags.slice(0, 3).map(function (t) { return '<span class="tag">#' + esc(t) + "</span>"; }).join("") + "</div>";
+    var mc = (it.media || []).length;
+    h += '<div class="card-foot"><span class="meta">' + (mc ? icon("i-image", "mini") + mc + " · " : "") + esc(ago(it.updatedAt)) + "</span>";
+    var link = safeUrl(it.link);
+    if (link) h += '<a class="link-btn icon-only" href="' + esc(link) + '" target="_blank" rel="noopener" aria-label="Open link">' + icon("i-ext") + "</a>";
+    h += '<button type="button" class="fav-btn" data-fav="' + esc(it.id) + '" aria-pressed="' + !!it.fav + '" aria-label="' + (it.fav ? "Remove from favorites" : "Add to favorites") + '">' + icon("i-star") + "</button></div></article>";
+    return h;
+  }
   function card(it) {
+    if (it.type === "note") return noteCard(it);
     var T = TYPES[it.type]; var h = '<article class="card" aria-label="' + esc(T.one + ": " + titleOf(it)) + '">';
     if (it.type === "video") {
       var id = ytId(it.url);
@@ -593,7 +669,7 @@
     h += "</div></article>";
     return h;
   }
-  function refreshResults() { var r = $("#results"); if (r) r.innerHTML = resultsHtml(ui.route); }
+  function refreshResults() { var r = $("#results"); if (r) { r.innerHTML = resultsHtml(ui.route); armMore(); } }
 
   /* ---------------- settings ---------------- */
   function viewSettings() {
@@ -621,16 +697,20 @@
     return h;
   }
   function exportData() {
-    var data = { app: "bhavnote", schema: SCHEMA, exportedAt: now(), settings: db.settings, items: db.items };
-    var json = JSON.stringify(data, null, 2), fname = "bhavnote-backup-" + ymd(new Date()) + ".json";
-    if (window.BhavnoteAndroid && window.BhavnoteAndroid.saveFile) {
-      try { var where = window.BhavnoteAndroid.saveFile(fname, json); toast(where ? "Backup saved to " + where : "Backup saved"); } catch (e) { toast("Couldn't save the backup file."); }
-      return;
-    }
-    var blob = new Blob([json], { type: "application/json" });
-    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname;
-    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    toast("Backup downloaded — " + db.items.length + " entries");
+    var go = function (media) {
+      var data = { app: "bhavnote", schema: SCHEMA, exportedAt: now(), settings: db.settings, items: db.items };
+      if (media && Object.keys(media).length) data.media = media;
+      var json = JSON.stringify(data, null, 2), fname = "bhavnote-backup-" + ymd(new Date()) + ".json";
+      if (window.BhavnoteAndroid && window.BhavnoteAndroid.saveFile) {
+        try { var where = window.BhavnoteAndroid.saveFile(fname, json); toast(where ? "Backup saved to " + where : "Backup saved"); } catch (e) { toast("Couldn't save the backup file."); }
+        return;
+      }
+      var blob = new Blob([json], { type: "application/json" });
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname;
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast("Backup downloaded — " + db.items.length + " entries");
+    };
+    if (window.BNEditor && window.BNEditor.exportMedia) window.BNEditor.exportMedia().then(go, function () { go(); }); else go();
   }
   function importData(file) {
     var r = new FileReader();
@@ -647,6 +727,7 @@
           var map = {}; db.items.forEach(function (i) { map[i.id] = i; });
           items.forEach(function (i) { var ex = map[i.id]; if (!ex) db.items.push(i); else if ((i.updatedAt || "") > (ex.updatedAt || "")) Object.assign(ex, i); });
         }
+        if (data.media && window.BNEditor && window.BNEditor.importMedia) window.BNEditor.importMedia(data.media);
         quietly(save); logEvent("import", "settings", (mode === "replace" ? "Backup se replace kiya: " : "Backup merge kiya: ") + items.length + " entries"); render(); toast((mode === "replace" ? "Replaced with " : "Merged ") + items.length + " entries");
       });
     };
@@ -727,6 +808,7 @@
     var it = id ? byId(id) : null;
     if (id && !it) return;
     type = it ? it.type : type;
+    if (type === "note" && window.BNEditor) { window.BNEditor.open(it ? it.id : null, preset); return; }
     var T = TYPES[type];
     var base = it || Object.assign({ tags: [], fav: false }, preset || {});
     if (!it && !base[T.opt]) base[T.opt] = (type === "client") ? "active" : T.opts[0];
@@ -891,7 +973,8 @@
   var nameTimer;
   function afterRender(r) {
     if (r === "settings") {
-      if (window.BNAI) { try { window.BNAI.mountSettings($("#aiSettingsSlot")); } catch (e) { console.warn(e); } }
+      var mountAI = function () { var slot = $("#aiSettingsSlot"); if (window.BNAI && slot && currentRoute() === "settings") { try { window.BNAI.mountSettings(slot); } catch (e) { console.warn(e); } } };
+      if (window.BNAI) mountAI(); else loadMod("ai").then(mountAI);
       var sn = $("#savedNote");
       ["sName", "sStudio"].forEach(function (id) {
         $("#" + id).addEventListener("input", function () {
@@ -912,9 +995,9 @@
       ib.addEventListener("click", function () { if (!deferredPrompt) return; deferredPrompt.prompt(); deferredPrompt.userChoice.finally(function () { deferredPrompt = null; ib.hidden = true; }); });
     }
     if (r === "dashboard") {
-      if (window.BNReport) { try { window.BNReport.mount($("#reportSlot")); } catch (e) { console.warn(e); } }
       $("#captureForm").addEventListener("submit", function (e) { e.preventDefault(); var i = $("#captureInput"); var v = i.value; i.value = ""; capture(v); });
     }
+    armMore();
     var fq = $("#fq");
     if (fq) {
       fq.addEventListener("input", debounce(function () { filt(ui.route).q = fq.value.trim(); refreshResults(); }, 140));
@@ -931,6 +1014,7 @@
     if (t.hasAttribute("data-capture")) { ui.captureMode = t.getAttribute("data-capture"); $$("[data-capture]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); var ci = $("#captureInput"); ci.placeholder = capturePlaceholder(); ci.focus(); return; }
     if (t.hasAttribute("data-fopt")) { var f = filt(ui.route); f.opt = t.getAttribute("data-fopt"); $$("[data-fopt]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); refreshResults(); return; }
     if (t.hasAttribute("data-ftype")) { var g = filt(ui.route); g.type = t.getAttribute("data-ftype"); $$("[data-ftype]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); refreshResults(); return; }
+    if (t.hasAttribute("data-farch")) { var ha = filt(ui.route); ha.archived = !ha.archived; t.setAttribute("aria-pressed", ha.archived); refreshResults(); return; }
     if (t.hasAttribute("data-ffav")) { var h = filt(ui.route); h.fav = !h.fav; t.setAttribute("aria-pressed", h.fav); refreshResults(); return; }
     if (t.hasAttribute("data-copy")) { var src = $(t.getAttribute("data-copy")); copyText(src ? (src.value != null ? src.value : src.textContent) : t.getAttribute("data-copy-text")); return; }
     if (t.hasAttribute("data-copy-text")) { copyText(t.getAttribute("data-copy-text")); return; }
@@ -973,7 +1057,7 @@
     get db() { return db; }, KEY: KEY, TYPES: TYPES, PLATFORMS: PLATFORMS, PLATFORM_LABEL: PLATFORM_LABEL, PAY_MODES: PAY_MODES, VIEWS: VIEWS, ui: ui,
     $: $, $$: $$, esc: esc, icon: icon, cap: cap, uid: uid, now: now, ymd: ymd, addDays: addDays, daysUntil: daysUntil, fmtDate: fmtDate, INR: INR,
     parseTags: parseTags, titleOf: titleOf, bodyOf: bodyOf, ago: ago, byId: byId, save: save, render: render, toast: toast, confirmBox: confirmBox,
-    openEditor: openEditor, deleteItem: deleteItem, debounce: debounce, haystack: haystack, safeUrl: safeUrl, clientPending: clientPending,
+    MON: MON, MONTHS: MONTHS, DAYS: DAYS, openEditor: openEditor, deleteItem: deleteItem, cardHtml: card, mdPlain: mdPlain, loadMod: loadMod, snapOf: function (id) { return snap[id]; }, setSnap: function (id, v) { if (v === undefined) delete snap[id]; else snap[id] = v; }, debounce: debounce, haystack: haystack, safeUrl: safeUrl, clientPending: clientPending,
     IDB: IDB, asActor: asActor, quietly: quietly, logEvent: logEvent, restoreFromTrash: restoreFromTrash, findClient: findClient, waLink: waLink, daysText: daysText, seedV3: seedV3, clean: clean, persist: persist, phoneOf: phoneOf, reminderText: reminderText, monthKey: monthKey, emptyBox: emptyBox, listItem: listItem, copyText: copyText
   };
   // boot after the feature modules (loaded after this file) have registered their views
@@ -982,10 +1066,12 @@
     snapAll();
     render();
     setTimeout(pruneHistory, 3000);
+    // warm the heavier modules once the first screen is up (never blocks first paint)
+    (window.requestIdleCallback || function (f) { return setTimeout(f, 900); })(function () { loadAllMods(); }, { timeout: 4000 });
     if (window.BNReady) window.BNReady.forEach(function (fn) { try { fn(); } catch (e) { console.warn(e); } });
   });
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     window.addEventListener("load", function () { navigator.serviceWorker.register("./sw.js", { scope: "./", updateViaCache: "none" }).then(function (reg) { reg.update().catch(function () {}); }).catch(function () {}); });
   }
-  window.Bhavnote = { version: 2, key: KEY };
+  window.Bhavnote = { version: 3, key: KEY };
 })();

@@ -1,6 +1,6 @@
 /* Bhavnote — Bhav AI. A chat helper that reads and changes Bhavnote data through Google Gemini
    (the user's own free API key, stored only in this browser). Registers the #/ai view,
-   the Settings → Bhav AI panel and the Sunday Report card on Home. */
+   and the Settings → Bhav AI panel. (v3: the Sunday Report card was removed from Home.) */
 (function () {
   "use strict";
   var B = window.BN; if (!B) return;
@@ -161,7 +161,7 @@
   }
 
   /* ---------- data snapshot sent with every chat ---------- */
-  function todayStr() { var d = new Date(); return B.ymd(d) + " (" + d.toLocaleDateString("en-IN", { weekday: "long" }) + ")"; }
+  function todayStr() { var d = new Date(); return B.ymd(d) + " (" + B.DAYS[d.getDay()] + ")"; }
   function compact(it) {
     var o = { id: it.id, type: it.type, title: B.titleOf(it) };
     ["kind", "status", "date", "deadline", "platform", "category", "mode", "company", "project", "contact"].forEach(function (k) { if (it[k]) o[k] = it[k]; });
@@ -617,45 +617,8 @@
     });
   }
 
-  /* ---------- Sunday Report card (Home) ---------- */
-  function reportWeek() { // Monday..Sunday of the most recent Sunday (today if Sunday)
-    var d = new Date(); var back = d.getDay(); // 0 = Sunday
-    var sun = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back); var mon = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 6);
-    return { from: B.ymd(mon), to: B.ymd(sun), key: B.ymd(sun) };
-  }
-  var autoTried = false;
-  function mountReport(slot) {
-    if (!slot) return; var w = reportWeek(); var r = weekSummary(w.from, w.to);
-    var reports = B.db.settings.reports || {}; var saved = reports[w.key];
-    var topCat = Object.keys(r.cats).sort(function (a, b) { return r.cats[b] - r.cats[a]; })[0];
-    var h = '<section class="panel report" aria-labelledby="repH"><div class="plan-head"><h2 id="repH">Sunday Report</h2><span class="key">' + esc(B.fmtDate(w.from).replace(/ \d{4}$/, "")) + " – " + esc(B.fmtDate(w.to).replace(/ \d{4}$/, "")) + "</span></div>" +
-      '<div class="rep-stats"><div><b>' + esc(INR.format(r.kamaya)) + "</b><span>kamaya</span></div><div><b>" + esc(INR.format(r.kharcha)) + "</b><span>kharcha</span></div><div><b>" + r.posted + "</b><span>posted</span></div><div><b>" + r.late_payers.length + "</b><span>late payers</span></div></div>";
-    if (topCat) h += '<p class="muted-p">Sabse zyada kharcha: <b>' + esc(B.cap(topCat)) + "</b> (" + esc(INR.format(r.cats[topCat])) + ")</p>";
-    if (saved) h += '<div class="rep-ai">' + md(saved.text) + "</div>";
-    h += '<div class="cf-actions"><button type="button" class="mini-btn" id="repGen">' + icon("i-spark") + (saved ? "Dobara banao" : "AI report banao") + "</button></div><p class=\"hint\" id=\"repStatus\"></p></section>";
-    slot.innerHTML = h;
-    $("#repGen").addEventListener("click", function () { generateReport(w, r, true); });
-    // On/after Sunday: make this week's report once, quietly, when the app is opened.
-    if (!saved && !autoTried && hasKey() && navigator.onLine) { autoTried = true; generateReport(w, r, false); }
-  }
-  function generateReport(w, r, manual) {
-    var st = $("#repStatus");
-    if (!hasKey()) { if (st) st.innerHTML = 'AI report ke liye <a href="#/settings">Settings</a> mein free Gemini key daalo.'; return; }
-    if (st) st.textContent = "Report bana raha hoon…";
-    var prompt = "Is hafte (" + w.from + " se " + w.to + ") ka Sunday report likho, Hinglish mein, max 8 chhoti lines, bullets: kitna kamaya, kharcha, kya faltu kharcha laga, kitni reels post hui, kaun late payer hai, aur agle hafte ke 2 tips. Data: " + JSON.stringify(r) + " Monthly goal: " + (B.db.settings.goal || 0);
-    callGemini({ systemInstruction: { parts: [{ text: "Tum Bhav AI ho, ek video editor ke business coach. Seedha, friendly Hinglish." }] }, contents: [{ role: "user", parts: [{ text: prompt }] }] })
-      .then(function (j) {
-        var t = (((j.candidates || [])[0] || {}).content || {}).parts || []; var text = t.filter(function (p) { return p.text && !p.thought; }).map(function (p) { return p.text; }).join("\n").trim();
-        if (!text) throw new Error("empty");
-        B.db.settings.reports = B.db.settings.reports || {}; B.db.settings.reports[w.key] = { text: text, at: B.now() };
-        var keys = Object.keys(B.db.settings.reports).sort(); while (keys.length > 8) delete B.db.settings.reports[keys.shift()];
-        B.save(); if (B.ui.route === "dashboard") mountReport($("#reportSlot"));
-      }).catch(function (e) { if (st) st.textContent = manual ? friendlyError(e) : ""; });
-  }
-
   window.BNAI = { mountSettings: mountSettings, runTool: runTool, pickModel: pickModel, cfg: cfg, callGemini: callGemini, friendlyError: friendlyError, lastUsed: function () { return lastUsed; }, _cfg: function (o) { if (o.delays) DELAYS = o.delays; if (o.timeout) TRY_TIMEOUT = o.timeout; }, snapshot: snapshot, lighten: lighten, hasKey: hasKey,
     listChats: listChats, openChat: openChat, deleteChat: deleteChat, newChat: newChat, md: md };
-  window.BNReport = { mount: mountReport };
   loadChat();
   if (log.length) archiveSoon();
 })();

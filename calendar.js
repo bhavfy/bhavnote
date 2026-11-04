@@ -9,8 +9,8 @@
   function calMonth() { if (!B.ui.calMonth) B.ui.calMonth = B.monthKey(new Date()); return B.ui.calMonth; }
   function calDate() { if (!B.ui.calDate) B.ui.calDate = today(); return B.ui.calDate; }
   function shiftMonth(mk, d) { var p = mk.split("-"); return B.monthKey(new Date(+p[0], +p[1] - 1 + d, 1)); }
-  function monthLabel(mk) { var p = mk.split("-"); return new Date(+p[0], +p[1] - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" }); }
-  function dayLabel(d) { var p = d.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" }); }
+  function monthLabel(mk) { var p = mk.split("-"); return B.MONTHS[+p[1] - 1] + " " + p[0]; }
+  function dayLabel(d) { var p = d.split("-"); return B.DAYS[new Date(+p[0], +p[1] - 1, +p[2]).getDay()] + ", " + (+p[2]) + " " + B.MON[+p[1] - 1]; }
   function posts() { return B.db.items.filter(function (it) { return it.type === "post"; }); }
   function byDate() { var m = {}; posts().forEach(function (p) { if (!p.date) return; (m[p.date] = m[p.date] || []).push(p); }); return m; }
   function postRow(p) {

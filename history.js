@@ -9,8 +9,8 @@
   var KEY_LABEL = { status: "Status", title: "Title", name: "Name", source: "Client", amount: "₹", date: "Date", deadline: "Deadline", fav: "Star", body: "Body", notes: "Notes", hook: "Hook", script: "Script", caption: "Caption", hashtags: "Hashtags", category: "Category", platform: "Platform", rate: "Rate", project: "Project", mode: "Mode", note: "Note", kind: "Kind", tags: "Tags", displayName: "Naam", studioName: "Studio", goal: "Goal", link: "Link", url: "URL", contact: "Contact", company: "Company", paidOn: "Paid on" };
   function st() { if (!B.ui.histTab) B.ui.histTab = "timeline"; if (!B.ui.histFilter) B.ui.histFilter = "all"; if (B.ui.histQ == null) B.ui.histQ = ""; return B.ui; }
   function dayKey(iso) { return B.ymd(new Date(iso)); }
-  function dayName(k) { var t = B.ymd(new Date()); if (k === t) return "Aaj"; if (k === B.addDays(-1)) return "Kal"; var p = k.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: p[0] === String(new Date().getFullYear()) ? undefined : "numeric" }); }
-  function timeOf(iso) { return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }); }
+  function dayName(k) { var t = B.ymd(new Date()); if (k === t) return "Aaj"; if (k === B.addDays(-1)) return "Kal"; var p = k.split("-"); return B.DAYS[new Date(+p[0], +p[1] - 1, +p[2]).getDay()].slice(0, 3) + ", " + (+p[2]) + " " + B.MON[+p[1] - 1] + (p[0] === String(new Date().getFullYear()) ? "" : " " + p[0]); }
+  function timeOf(iso) { var d = new Date(iso); if (isNaN(d)) return ""; var h = d.getHours(), m = d.getMinutes(); return (h % 12 || 12) + ":" + (m < 10 ? "0" : "") + m + " " + (h < 12 ? "am" : "pm"); }
   function matchesFilter(e, f) {
     if (f === "all") return true; if (f === "ai") return e.by === "ai";
     if (f === "money") return e.type === "income" || e.type === "expense"; return e.type === f;
