@@ -3,7 +3,7 @@
   "use strict";
 
   var KEY = "bhavnote.v1";
-  var ASSET_V = "20261104f";
+  var ASSET_V = "20261107c";
   var SCHEMA = 3;
 
   /* ---------------- types ---------------- */
@@ -442,11 +442,13 @@
 
   /* ---------------- dashboard ---------------- */
   function greeting() { var h = new Date().getHours(); return h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
+  var HOME_FILTERS = [["all", "All"], ["notes", "Notes"], ["cal", "Calendar"], ["paisa", "Paisa"], ["clients", "Clients"], ["books", "Books"]];
   function viewDashboard() {
     var c = counts();
     var name = db.settings.displayName ? ", <em>" + esc(db.settings.displayName) + "</em>" : "";
     var dn = new Date(), date = DAYS[dn.getDay()] + ", " + dn.getDate() + " " + MONTHS[dn.getMonth()];
     var modes = [["note", "Note"], ["video", "YouTube link"]];
+    var f = ui.homeFilter || "all";
     var h = '<section class="hero" aria-labelledby="greet">' +
       '<p class="date">' + esc(date) + '</p>' +
       '<h1 id="greet">' + greeting() + name + '</h1>' +
@@ -458,16 +460,18 @@
       '<input class="input" id="captureInput" placeholder="' + capturePlaceholder() + '" enterkeyhint="done">' +
       '<button class="btn btn-primary" type="submit" aria-label="Save capture">' + icon("i-arrow") + '</button></div>' +
       '</form></section>';
+    h += '<div class="home-filters" role="group" aria-label="Show">' + HOME_FILTERS.map(function (x) { return '<button type="button" class="hf" data-hf="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + "</button>"; }).join("") + "</div>";
+    h += '<div class="masonry" data-f="' + f + '">';
     h += todayPlan();
     var stats = [["client", "Clients", "#/clients", "i-users"], ["video", "Videos", "#/youtube", "i-play"], ["note", "Notes", "#/notes", "i-note"], ["fav", "Starred", "#/favorites", "i-star"]];
-    h += '<div class="more-links"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch aur trash</small></span></a></div>';
-    h += '<div class="stats">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '">' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span></a>"; }).join("") + "</div>";
+    h += '<div class="stats" data-k="notes clients books">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '">' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span></a>"; }).join("") + "</div>";
+    h += '<div class="more-links" data-k="books"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch aur trash</small></span></a></div>';
     var recent = db.items.filter(function (it) { return !it.archived; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 7);
     var due = db.items.filter(function (it) { return it.type === "client" && it.deadline && ["lead", "active", "review"].indexOf(it.status) > -1; })
       .sort(function (a, b) { return a.deadline < b.deadline ? -1 : 1; }).slice(0, 4);
-    h += '<div class="dash-cols"><section aria-labelledby="recentH"><div class="section-label"><h2 id="recentH">Recent</h2></div>';
+    h += '<section class="mcard c-ink" data-k="notes" aria-labelledby="recentH"><div class="section-label"><h2 id="recentH">Recent</h2></div>';
     h += recent.length ? '<div class="list">' + recent.map(function (it) { return listItem(it, false); }).join("") + "</div>" : emptyBox("Nothing here yet", "Capture your first note above.", null);
-    h += '</section><section aria-labelledby="dueH"><div class="section-label"><h2 id="dueH">Upcoming deadlines</h2><a href="#/clients">All clients</a></div>';
+    h += '</section><section class="mcard c-ink" data-k="clients cal" aria-labelledby="dueH"><div class="section-label"><h2 id="dueH">Upcoming deadlines</h2><a href="#/clients">All clients</a></div>';
     h += due.length ? '<div class="list">' + due.map(function (it) { return listItem(it, true); }).join("") + "</div>" : emptyBox("No open deadlines", "Client jobs with a deadline show up here.", null);
     h += "</section></div>";
     return h;
@@ -482,7 +486,7 @@
       .sort(function (a, b) { return a.deadline < b.deadline ? -1 : 1; });
     var pend = db.items.filter(function (it) { return it.type === "income" && it.status === "pending" && (!it.date || daysUntil(it.date) <= 3); })
       .sort(function (a, b) { return (a.date || "") < (b.date || "") ? -1 : 1; });
-    var h = '<section class="panel plan" aria-labelledby="planH"><div class="plan-head"><h2 id="planH">Aaj ka plan</h2><a href="#/calendar">Calendar</a></div>';
+    var h = '<section class="panel plan mcard c-mustard" data-k="cal paisa clients" aria-labelledby="planH"><div class="plan-head"><h2 id="planH">Aaj ka plan</h2><a href="#/calendar">Calendar</a></div>';
     if (!posts.length && !due.length && !pend.length) h += '<p class="plan-empty">Aaj sab clear hai ✨ Koi post, deadline ya payment pending nahi.</p>';
     if (posts.length) {
       h += '<div class="plan-group"><p class="plan-label">' + icon("i-cal") + "Aaj post karna hai</p>";
@@ -1010,6 +1014,7 @@
     if (t.hasAttribute("data-new")) { openEditor(t.getAttribute("data-new")); return; }
     if (t.hasAttribute("data-choose")) { $("#chooser").close(); openEditor(t.getAttribute("data-choose")); return; }
     if (t.hasAttribute("data-capture")) { ui.captureMode = t.getAttribute("data-capture"); $$("[data-capture]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); var ci = $("#captureInput"); ci.placeholder = capturePlaceholder(); ci.focus(); return; }
+    if (t.hasAttribute("data-hf")) { ui.homeFilter = t.getAttribute("data-hf"); $$("[data-hf]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); var mm = $(".masonry"); if (mm) mm.setAttribute("data-f", ui.homeFilter); return; }
     if (t.hasAttribute("data-fopt")) { var f = filt(ui.route); f.opt = t.getAttribute("data-fopt"); $$("[data-fopt]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); refreshResults(); return; }
     if (t.hasAttribute("data-ftype")) { var g = filt(ui.route); g.type = t.getAttribute("data-ftype"); $$("[data-ftype]").forEach(function (b) { b.setAttribute("aria-pressed", b === t); }); refreshResults(); return; }
     if (t.hasAttribute("data-farch")) { var ha = filt(ui.route); ha.archived = !ha.archived; t.setAttribute("aria-pressed", ha.archived); refreshResults(); return; }

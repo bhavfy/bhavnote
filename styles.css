@@ -668,3 +668,259 @@ body[data-route="notes"] .fab{display:grid}
 
 /* ---------------- books spacing ---------------- */
 #bookList{margin-top:16px}
+
+/* ==========================================================================
+   2026-11-07 visual redesign — black home with colour cards, cream paper
+   notes, pill chrome. Layout, data and behaviour are unchanged; this block
+   only restyles and comes last so it wins the cascade.
+   Animations stay transform/opacity; no backdrop-filter anywhere.
+   ========================================================================== */
+:root{
+  --c-mustard:#f2c14e; --c-coral:#ff8a65; --c-sky:#8fbcff; --c-mint:#9fe0b4; --c-lilac:#c9b8ff; --c-cream:#f4ecdb;
+  --ink-on:#15130e; --ink-on2:rgba(21,19,14,.62);
+  --card:#1c1c1e;
+  --r-card:26px;
+}
+::selection{background:rgba(242,193,78,.55);color:inherit}
+h1{font-weight:800;letter-spacing:-.035em}
+body{background:#000}
+
+/* top bar: quieter, no hard rule */
+.topbar{background:rgba(0,0,0,.94);border-width:0;box-shadow:none;padding-top:calc(6px + env(safe-area-inset-top))}
+.topbar .brand strong{font-weight:800;letter-spacing:-.03em}
+.icon-btn{background:#1c1c1e;width:42px;height:42px}
+.icon-btn:hover{background:#2c2c2e}
+
+/* floating pill nav */
+.bottomnav{background:#1c1c1e;border:1px solid rgba(255,255,255,.1);box-shadow:0 12px 28px rgba(0,0,0,.6);height:64px}
+.bottomnav a[aria-current="page"]{background:#f5f5f7;color:#000;box-shadow:none}
+.bottomnav a[aria-current="page"] .ic{stroke-width:1.9}
+
+/* ---------- home ---------- */
+.hero{background:none;border:0;box-shadow:none;padding:14px 2px 0;margin:0}
+.hero .date{font-size:13px;font-weight:600;color:#8e8e93;letter-spacing:.01em;margin:0 0 4px}
+.hero h1{font-size:44px;line-height:1.02;font-weight:800;letter-spacing:-.045em;margin:0}
+.hero h1 em{font-style:normal;color:#f2c14e}
+.hero .studio{font-size:14px;color:#8e8e93;margin:8px 0 0}
+.capture{margin-top:16px}
+.capture-modes{display:flex;gap:8px;margin-bottom:8px}
+.capture-row{display:flex;gap:8px;align-items:center}
+.capture-row .input{border-radius:999px;background:#1c1c1e;border:1px solid rgba(255,255,255,.1);height:50px;padding:0 18px}
+.capture-row .btn-primary{width:50px;height:50px;border-radius:50%;padding:0;flex:none}
+.capture-modes .chip{height:32px;border-radius:999px;padding:0 13px;background:#1c1c1e;border:0;color:#c7c7cc;font-size:13px;font-weight:600}
+.capture-modes .chip[aria-pressed="true"]{background:#f5f5f7;color:#000}
+
+.home-filters{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:18px 16px 4px;margin:0 -16px}
+.home-filters::-webkit-scrollbar{display:none}
+.hf{flex:none;height:38px;padding:0 16px;border-radius:999px;border:0;background:#1c1c1e;color:#c7c7cc;font:600 14px var(--font);letter-spacing:-.01em}
+.hf[aria-pressed="true"]{background:#f5f5f7;color:#000}
+.hf:active{transform:scale(.97);transition:none}
+
+.masonry{column-count:2;column-gap:10px;margin-top:12px}
+.masonry>*{break-inside:avoid;-webkit-column-break-inside:avoid;display:block;margin:0 0 10px;min-width:0}
+.masonry>.stats,.masonry>.more-links,.masonry>.plan{column-span:all}
+.masonry .mcard{border-radius:var(--r-card);padding:16px;border:0;box-shadow:none;background:var(--card)}
+.masonry .mcard.c-ink{background:#1c1c1e}
+.masonry .mcard.c-mustard{background:var(--c-mustard);color:var(--ink-on)}
+.masonry .section-label h2{font-size:20px;font-weight:800;letter-spacing:-.03em;color:#f5f5f7}
+.section-label a{color:#8e8e93;font-size:13px}
+.masonry .mcard .list,.masonry .mcard .list-item{background:transparent}
+.masonry .mcard .list-item{border-top-color:rgba(255,255,255,.08)}
+.masonry .mcard .list-item:first-child{border-top:0}
+.masonry .mcard .list-item:hover{background:transparent}
+.masonry .mcard .li-title{font-weight:650}
+.masonry .mcard .li-icon{background:rgba(255,255,255,.1)}
+
+/* plan card (mustard): dark ink on yellow */
+.plan{padding:18px}
+.plan .plan-head h2{font-size:24px;font-weight:800;letter-spacing:-.035em;color:var(--ink-on)}
+.plan-head a{color:var(--ink-on2);font-weight:600}
+.plan-label{color:var(--ink-on2)}
+.plan-row{color:var(--ink-on);border-top-color:rgba(21,19,14,.14)}
+.plan-row .pr-side{color:var(--ink-on2)}
+.plan-row .pr-side.late{color:#9b1c0e}
+.plan-empty,.plan-note{color:var(--ink-on2)}
+.plan-note a{color:var(--ink-on)}
+.plan .mini-btn{background:var(--ink-on);color:var(--c-mustard);border:0}
+.plan .mini-btn .ic{color:var(--c-mustard)}
+.plan .dot.st-idea{box-shadow:inset 0 0 0 1.5px var(--ink-on2)}
+.plan .dot.st-script{background:#2f6f9f}.plan .dot.st-shoot{background:#7a5d00}.plan .dot.st-edit{background:#a14a10}.plan .dot.st-posted{background:#1f7a3a}
+
+/* stat tiles: four flat colours */
+.stats{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin:0 0 10px}
+.stat{border-radius:var(--r-card);padding:16px;min-height:112px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;color:var(--ink-on);background:var(--c-sky);border:0;box-shadow:none;text-decoration:none}
+.stat .ic{color:var(--ink-on);width:22px;height:22px;stroke-width:1.8}
+.stat .num{font-size:38px;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+.stat .lbl{font-size:14px;font-weight:650;color:var(--ink-on2)}
+.stat.t-client{background:var(--c-sky)}
+.stat.t-video{background:var(--c-coral)}
+.stat.t-note{background:var(--c-mint)}
+.stat.t-fav{background:var(--c-lilac)}
+.stat:active{transform:scale(.97);transition:none}
+
+/* books / history link cards */
+.more-links{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin:0 0 10px}
+.more-link{border-radius:var(--r-card);padding:16px;background:var(--c-cream);color:var(--ink-on);border:0;box-shadow:none;align-items:flex-start;flex-direction:column;justify-content:space-between;min-height:112px}
+.more-link .ic{color:var(--ink-on);width:22px;height:22px}
+.more-link b{font-size:18px;font-weight:800;letter-spacing:-.03em}
+.more-link small{color:var(--ink-on2);white-space:normal}
+.more-link:nth-child(2){background:#2c2c2e;color:#f5f5f7}
+.more-link:nth-child(2) .ic{color:#f5f5f7}
+.more-link:nth-child(2) small{color:#8e8e93}
+
+/* home filters: which cards show */
+.masonry[data-f="notes"]>:not([data-k~="notes"]){display:none!important}
+.masonry[data-f="cal"]>:not([data-k~="cal"]){display:none!important}
+.masonry[data-f="paisa"]>:not([data-k~="paisa"]){display:none!important}
+.masonry[data-f="clients"]>:not([data-k~="clients"]){display:none!important}
+.masonry[data-f="books"]>:not([data-k~="books"]){display:none!important}
+.masonry[data-f="notes"] .stat:not(.t-note),.masonry[data-f="clients"] .stat:not(.t-client),.masonry[data-f="books"] .stat{display:none!important}
+.masonry[data-f="notes"] .more-links,.masonry[data-f="clients"] .more-links{display:none!important}
+.masonry[data-f="books"] .stats{display:none!important}
+
+/* ---------- other screens: same language ---------- */
+.page-head{margin-top:10px}
+.page-head h1{font-size:44px;font-weight:800;letter-spacing:-.045em;line-height:1.02}
+.panel{border-radius:var(--r-card);background:#1c1c1e;border:0;box-shadow:none;padding:18px}
+.panel h2{font-size:20px;font-weight:800;letter-spacing:-.03em}
+.card,.ncard{border-radius:var(--r-card);background:#1c1c1e;border:0;box-shadow:none}
+.chip{border-radius:999px;background:#1c1c1e;border:0;color:#c7c7cc;height:36px;padding:0 14px;font-weight:600}
+.chip[aria-pressed="true"]{background:#f5f5f7;color:#000}
+.chip[aria-pressed="true"] .n{color:rgba(0,0,0,.55)}
+.input,.select{border-radius:999px;background:#1c1c1e;border:1px solid rgba(255,255,255,.1)}
+.select{border-radius:18px}
+.btn{border-radius:999px}
+.btn-primary{background:#f5f5f7;color:#000}
+.list{border-radius:var(--r-card);background:#1c1c1e;border:0;box-shadow:none}
+.list-item{padding-left:16px;padding-right:16px}
+.li-icon{border-radius:14px}
+.cal-grid{border-radius:var(--r-card)}
+.cal-day{border-radius:16px}
+.cal-day.sel{background:var(--c-mustard);color:var(--ink-on)}
+.cal-day.sel .dot{box-shadow:0 0 0 1.5px var(--ink-on)}
+.cal-day.today .n{background:#f5f5f7;color:#000}
+.cal-day.sel.today .n{background:var(--ink-on);color:var(--c-mustard)}
+.money{border-radius:var(--r-card);background:#1c1c1e;border:0;box-shadow:none}
+.money.hero-m{background:var(--c-mint);color:var(--ink-on)}
+.money.hero-m .lbl,.money.hero-m .cap{color:var(--ink-on2)}
+.money.hero-m .num{color:var(--ink-on)}
+.money .num.neg{color:#ff8f85}
+.upload-box{border-radius:var(--r-card);border:0;background:var(--c-sky);color:var(--ink-on)}
+.upload-box .ic{color:var(--ink-on)}
+.upload-box small{color:var(--ink-on2)}
+
+/* floating + button: black disc with a light ring */
+.fab{background:#0b0b0c;color:#f5f5f7;border:1.5px solid rgba(255,255,255,.32);border-radius:50%;width:60px;height:60px;box-shadow:0 10px 24px rgba(0,0,0,.6)}
+.fab .ic{width:26px;height:26px;stroke-width:2.1}
+
+/* ---------- note editor: warm cream paper by default ---------- */
+.ne:not([class*="nc-"]){--nc:#f5efe2;--text:#1e1b15;--faint:#8a8272;background:#f5efe2;color:#1e1b15}
+.ne:not([class*="nc-"]) .ne-top{background:#f5efe2}
+.ne:not([class*="nc-"]) .ne-btn{color:#3a352b}
+.ne:not([class*="nc-"]) .ne-btn:active{background:rgba(0,0,0,.08)}
+.ne:not([class*="nc-"]) .ne-stat{color:#8a8272}
+.ne:not([class*="nc-"]) .ne-title{color:#1e1b15;font-weight:800;font-size:30px;letter-spacing:-.035em}
+.ne:not([class*="nc-"]) .ne-title::placeholder,.ne:not([class*="nc-"]) .ne-body::placeholder,.ne:not([class*="nc-"]) .ne-it::placeholder{color:#b3aa98}
+.ne:not([class*="nc-"]) .ne-body,.ne:not([class*="nc-"]) .ne-it,.ne:not([class*="nc-"]) .ne-prev{color:#2a261e;caret-color:#1e1b15}
+.ne:not([class*="nc-"]) .ne-prev a{color:#1e1b15}
+.ne:not([class*="nc-"]) .ne-chip{background:rgba(0,0,0,.07);color:#3a352b}
+.ne:not([class*="nc-"]) .ne-cb::before{border-color:#9a9180}
+.ne:not([class*="nc-"]) .ne-cb[aria-pressed="true"]::before{background:#1e1b15;border-color:#1e1b15}
+.ne:not([class*="nc-"]) .ne-cb[aria-pressed="true"]{color:#f5efe2}
+.ne:not([class*="nc-"]) .ne-ri.done .ne-it,.ne:not([class*="nc-"]) .ne-prev li.d{color:#9a9180}
+.ne:not([class*="nc-"]) .ne-addrow{color:#7a7262}
+.ne:not([class*="nc-"]) .ne-sep{border-top-color:rgba(0,0,0,.1);color:#8a8272}
+.ne:not([class*="nc-"]) .ne-thumb{background:rgba(0,0,0,.06)}
+.ne:not([class*="nc-"]) .ne-aud{background:rgba(0,0,0,.07)}
+.ne:not([class*="nc-"]) .ne-at{color:#5a5447}
+.ne:not([class*="nc-"]) .ne-viewer{background:#f5efe2}
+/* floating dark pill toolbar over the paper */
+.ne .ne-bar{margin:0 12px calc(10px + env(safe-area-inset-bottom));padding:4px 6px;border-radius:999px;background:#1c1c1e;border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 26px rgba(0,0,0,.35)}
+.ne.kb .ne-bar{margin-bottom:6px}
+.ne .ne-bar .ne-btn{color:#f2f2f7;width:44px;height:44px}
+.ne .ne-bar .ne-btn[aria-pressed="true"]{background:rgba(255,255,255,.16)}
+.ne .ne-bar .ne-btn[disabled]{opacity:.3}
+.ne .ne-fmt{margin:0 12px 6px;border-radius:999px;background:#1c1c1e;border:1px solid rgba(255,255,255,.08);padding:6px}
+.ne .ne-fmt button{border-radius:999px;background:transparent;color:#f2f2f7}
+.ne .ne-fmt button:active{background:rgba(255,255,255,.16)}
+.ne .ne-top{padding-top:calc(4px + env(safe-area-inset-top))}
+.ne .ne-main{padding:0 22px}
+.ne-sheet{border-radius:28px 28px 0 0;background:#1c1c1e}
+
+.hero::after{display:none}
+.masonry>section.mcard{column-span:all}
+.masonry .mcard .section-label{margin-bottom:6px}
+.masonry .mcard .section-label h2{font-size:22px}
+.plan-label{color:rgba(21,19,14,.72);font-weight:700}
+.plan-label .ic{color:rgba(21,19,14,.72)}
+.masonry .mcard .list-item{padding-left:0;padding-right:0}
+
+.hero h1{font-size:40px}
+@media (min-width:900px){.hero h1{font-size:44px}}
+
+/* ---------- spacing pass (2026-11-07, Bhavesh: "gap rakho, kafi chipka chipka lag raha hai") ----------
+   Layout only: wider gaps between cards, pills, rows and sections; page sides 20-22px;
+   bottom clearance for the floating nav and + button. No colour, data or feature change. */
+main{padding:14px 20px calc(150px + env(safe-area-inset-bottom))}
+.hero{padding:20px 2px 0}
+.hero h1{margin-bottom:0}
+.capture{margin-top:22px}
+.capture-modes{gap:10px;margin-bottom:12px}
+.capture-row{gap:10px}
+.capture-row .input{height:52px}
+.capture-row .btn-primary{width:52px;height:52px}
+.home-filters{gap:10px;padding:22px 20px 6px;margin:0 -20px}
+.hf{height:40px;padding:0 18px}
+.section-label{margin:32px 4px 14px}
+.masonry{column-gap:14px;margin-top:16px}
+.masonry>*{margin:0 0 14px}
+.masonry .mcard{padding:18px;border-radius:var(--r-card)}
+.masonry .mcard .section-label{margin:4px 0 10px}
+.masonry .mcard .list-item{padding-top:12px;padding-bottom:12px}
+.plan{padding:20px}
+.stats{gap:14px;margin:0 0 14px}
+.stat{padding:18px 18px 20px;min-height:124px}
+.grid{gap:16px}
+.card{gap:12px;padding:18px 18px 14px}
+.card-top{gap:8px}
+.card-foot{gap:8px}
+.toolbar{gap:14px;margin-bottom:22px}
+.toolbar-row{gap:10px}
+.toolbar .select{min-height:44px}
+.filter-search .input{min-height:44px}
+.chips{gap:4px}
+.page-head{margin:16px 0 22px;gap:14px}
+.page-head .sub{margin-top:8px}
+.eyebrow{margin-bottom:6px}
+.panel{padding:20px}
+.list-item{gap:14px;padding:15px 18px;min-height:52px}
+.list-item .li-title{margin-bottom:0}
+.list-item{content-visibility:auto;contain-intrinsic-size:auto 72px}
+.masonry .mcard .list-item{padding-left:0;padding-right:0}
+.ncard{padding:16px 16px 10px;gap:10px}
+.notes-grid{gap:14px}
+.grid-label{margin:18px 4px 2px}
+.grid-label:first-child{margin-top:4px}
+.row2{gap:14px}
+.field{gap:8px}
+.fab{right:20px}
+.bottomnav{left:14px;right:14px}
+.ne-main{padding:0 22px}
+.ne-title{padding:16px 0 12px;font-size:28px}
+.ne-body{padding:10px 0 32px;line-height:1.62}
+.ne-list,.ne-prev{padding:8px 0 32px}
+.ne-chips{gap:8px;padding:4px 0 12px}
+.ne-chip{height:32px;padding:0 13px}
+.ne-addrow{padding:12px 8px 12px 7px;gap:14px}
+.ne-sep{margin:20px 0 6px;padding-top:18px}
+.ne-bar{padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+.ne-top{padding:calc(8px + env(safe-area-inset-top)) 8px 6px 8px;gap:4px}
+.ne-form{gap:10px;padding:0 6px 12px}
+.ne-sr{gap:18px;min-height:56px;padding:0 12px}
+.ne-swatches{gap:16px 8px;padding:8px 6px 10px}
+@media (min-width:900px){main{padding:30px 40px 72px}.page-head{margin:20px 0 26px}.grid{gap:18px}.card{padding:20px 20px 16px}.stats{gap:16px}}
+
+/* ---------- gap fix (2026-11-07c): Aaj ka plan card sat 0px above the stat tiles (the dashboard rule zeroed panel margins);
+   every Home block is now 16px from the next, same as the card grid. Layout only. */
+[data-route="dashboard"] .masonry>.panel,.masonry>.panel,.masonry>.plan,[data-route="dashboard"] .masonry>.plan{margin:0 0 16px}
+.masonry>.stats,.masonry>.more-links{margin:0 0 16px}
