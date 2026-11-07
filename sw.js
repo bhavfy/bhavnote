@@ -1,8 +1,8 @@
 /* Bhavnote service worker — offline app shell. */
-const VERSION = "3.0.0-20261107c";
-const CACHE = "bhavnote-v3-20261107c";
+const VERSION = "3.0.0-20261107d";
+const CACHE = "bhavnote-v3-20261107d";
 const THUMBS = "bhavnote-thumbs";
-const SHELL = ["./", "./index.html", "./styles.css?v=20261107c", "./app.js?v=20261107c", "./paisa.js?v=20261107c", "./calendar.js?v=20261107c", "./editor.js?v=20261107c", "./history.js?v=20261107c", "./books.js?v=20261107c", "./manifest.json",
+const SHELL = ["./", "./index.html", "./styles.css?v=20261107d", "./app.js?v=20261107d", "./paisa.js?v=20261107d", "./calendar.js?v=20261107d", "./editor.js?v=20261107d", "./history.js?v=20261107d", "./books.js?v=20261107d", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-192.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png"];
 
 self.addEventListener("install", (e) => {

@@ -924,3 +924,53 @@ main{padding:14px 20px calc(150px + env(safe-area-inset-bottom))}
    every Home block is now 16px from the next, same as the card grid. Layout only. */
 [data-route="dashboard"] .masonry>.panel,.masonry>.panel,.masonry>.plan,[data-route="dashboard"] .masonry>.plan{margin:0 0 16px}
 .masonry>.stats,.masonry>.more-links{margin:0 0 16px}
+
+/* ---------- colour themes: palette buttons, tinted tiles, custom note colours ---------- */
+.tint-btn{position:absolute;top:0;right:0;width:44px;height:44px;margin:0;padding:0;border:0;background:transparent;color:inherit;display:grid;place-items:center;cursor:pointer;z-index:2;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.tint-btn::before{content:"";position:absolute;left:7px;top:7px;width:30px;height:30px;border-radius:50%;background:rgba(127,127,127,.22)}
+.tint-btn:active::before{background:rgba(127,127,127,.4)}
+.tint-btn:focus-visible{outline:2px solid currentColor;outline-offset:-6px;border-radius:50%}
+.tint-btn .ic{position:relative;width:16px;height:16px;stroke-width:2;color:currentColor}
+.stat,.more-link{position:relative}
+.section-label .tint-btn,.plan-head .tint-btn{position:relative;top:auto;right:auto;flex:none;margin:-12px -12px -12px 0}
+[data-tinted]{background:var(--tile)!important;color:var(--tt)!important;border-color:transparent!important;box-shadow:none!important}
+[data-tinted] h2,[data-tinted] h3,[data-tinted] b,[data-tinted] .num,[data-tinted] .li-title,[data-tinted] .tint-btn,[data-tinted] .ic{color:var(--tt)!important}
+[data-tinted] small,[data-tinted] .lbl,[data-tinted] .pr-side,[data-tinted] .plan-label,[data-tinted] .plan-head a,[data-tinted] .section-label a,[data-tinted] .li-sub,[data-tinted] .plan-empty,[data-tinted] .plan-note,[data-tinted] .plan-label .ic{color:var(--tt2)!important}
+[data-tinted] .plan-note a{color:var(--tt)!important}
+[data-tinted] .plan-row{color:var(--tt);border-top-color:var(--tt2)}
+[data-tinted] .mini-btn{background:var(--tt);color:var(--tile)}
+[data-tinted] .mini-btn .ic{color:var(--tile)}
+[data-tinted] .li-icon{background:transparent;box-shadow:inset 0 0 0 1px var(--tt2)}
+[data-tinted] .list-item{border-top-color:var(--tt2)}
+.ncard.nc-custom{background:var(--nc);border-color:transparent}
+.ncard.nc-custom,.ncard.nc-custom h3,.ncard.nc-custom h3 button,.ncard.nc-custom .excerpt,.ncard.nc-custom .fav-btn{color:var(--text)}
+.ncard.nc-custom .meta,.ncard.nc-custom .tag,.ncard.nc-custom .excerpt{color:var(--muted)}
+.ne-pickrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 12px;flex-wrap:wrap}
+.ne-pick{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;color:#f5f5f7}
+.ne-pick input,.tint-pick input{width:44px;height:44px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer}
+.ne-pick input::-webkit-color-swatch-wrapper,.tint-pick input::-webkit-color-swatch-wrapper{padding:0}
+.ne-pick input::-webkit-color-swatch,.tint-pick input::-webkit-color-swatch{border:2px solid rgba(255,255,255,.35);border-radius:50%}
+.ne-reset{min-height:44px;padding:0 18px;border:0;border-radius:999px;background:rgba(255,255,255,.12);color:#f5f5f7;font:600 14px var(--font)}
+.tint-dlg{position:fixed;inset:auto 0 0 0;margin:0 auto;width:100%;max-width:560px;border:0;border-radius:28px 28px 0 0;background:#1c1c1e;color:#f5f5f7;padding:10px 20px calc(22px + env(safe-area-inset-bottom))}
+.tint-dlg[open]{animation:tintUp .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes tintUp{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.tint-dlg[open]{animation:none}}
+.tint-dlg::backdrop{background:rgba(0,0,0,.5)}
+.tint-grab{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.28);margin:0 auto 14px}
+.tint-dlg h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.035em}
+.tint-sub{margin:4px 0 6px;color:#a1a1a6;font-size:14px}
+.tint-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap}
+.tint-row.end{justify-content:flex-end}
+.tint-pick{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px}
+.tint-sw{display:flex;flex-wrap:wrap;gap:4px 2px;margin:8px -6px 0}
+.tint-sw button{width:44px;height:44px;border:0;padding:0;background:transparent;display:grid;place-items:center;border-radius:50%;-webkit-tap-highlight-color:transparent}
+.tint-sw button i{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+.tint-sw button .ic{width:16px;height:16px;stroke-width:2.4;opacity:0}
+.tint-sw button[aria-checked="true"] i{box-shadow:0 0 0 2px #1c1c1e,0 0 0 4px #f5f5f7}
+.tint-sw button[aria-checked="true"] .ic{opacity:1}
+.tc-label{margin:16px 0 0;font-size:13px;font-weight:600;color:var(--muted)}
+.tc-seg{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.tc-seg .chip{min-height:44px}
+body{background:var(--bg)!important}
+.masonry .mcard .section-label{position:relative;flex-wrap:wrap;padding-right:44px}
+.masonry .mcard .section-label .tint-btn{position:absolute;top:-8px;right:-10px;margin:0}

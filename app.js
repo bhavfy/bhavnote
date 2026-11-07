@@ -3,7 +3,7 @@
   "use strict";
 
   var KEY = "bhavnote.v1";
-  var ASSET_V = "20261107c";
+  var ASSET_V = "20261107d";
   var SCHEMA = 3;
 
   /* ---------------- types ---------------- */
@@ -443,6 +443,105 @@
   /* ---------------- dashboard ---------------- */
   function greeting() { var h = new Date().getHours(); return h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
   var HOME_FILTERS = [["all", "All"], ["notes", "Notes"], ["cal", "Calendar"], ["paisa", "Paisa"], ["clients", "Clients"], ["books", "Books"]];
+  /* ---------- colour themes: own key (bhavnote.theme.v1), bhavnote.v1 data untouched ---------- */
+  var THEME_KEY = "bhavnote.theme.v1";
+  var PALETTE = [["mustard", "Mustard", "#f2c14e"], ["coral", "Coral", "#ff8a65"], ["sky", "Sky", "#8fbcff"], ["mint", "Mint", "#9fe0b4"], ["lilac", "Lilac", "#c9b8ff"], ["cream", "Cream", "#f4ecdb"], ["pink", "Pink", "#f4a6c6"], ["orange", "Orange", "#ff9f43"], ["graphite", "Graphite", "#2c2c2e"], ["white", "White", "#f5f5f7"]];
+  var TILE_NAMES = { plan: "Aaj ka plan", "stat-client": "Clients", "stat-video": "Videos", "stat-note": "Notes", "stat-fav": "Starred", books: "Books", history: "History", recent: "Recent", due: "Upcoming deadlines" };
+  var THEME = { tiles: {}, accent: "", page: "" };
+  function okHex(s) { s = String(s == null ? "" : s).trim(); return /^#[0-9a-fA-F]{6}$/.test(s) ? s.toLowerCase() : ""; }
+  function lin(c) { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  function inkFor(hex) { var n = parseInt(hex.slice(1), 16); var L = 0.2126 * lin(n >> 16 & 255) + 0.7152 * lin(n >> 8 & 255) + 0.0722 * lin(n & 255); return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? "#111111" : "#ffffff"; }
+  // every colour a tinted surface needs, derived from its one background hex (contrast-checked ink)
+  function tintPairs(hex) {
+    var ink = inkFor(hex), ink2 = ink === "#111111" ? "rgba(17,17,17,.68)" : "rgba(255,255,255,.74)";
+    return [["--tile", hex], ["--nc", hex], ["--tt", ink], ["--tt2", ink2], ["--text", ink], ["--muted", ink2], ["--faint", ink2], ["--ink-on", ink], ["--ink-on2", ink2]];
+  }
+  function tintCss(hex) { return tintPairs(hex).map(function (p) { return p[0] + ":" + p[1]; }).join(";"); }
+  function tileHex(id, fallback) { return THEME.tiles[id] || fallback || ""; }
+  function tileAttr(id, fallback) { var hex = tileHex(id, fallback); return ' data-tile="' + id + '"' + (hex ? ' data-tinted="" style="' + tintCss(hex) + '"' : ""); }
+  function tintBtn(id) { return '<button type="button" class="tint-btn" data-tint="' + id + '" aria-label="Rang badlo: ' + TILE_NAMES[id] + '">' + icon("i-palette") + "</button>"; }
+  function loadTheme() {
+    try {
+      var t = JSON.parse(localStorage.getItem(THEME_KEY) || "null"); if (!t || typeof t !== "object") return;
+      var tiles = {}; Object.keys(t.tiles || {}).forEach(function (k) { if (TILE_NAMES[k] && okHex(t.tiles[k])) tiles[k] = okHex(t.tiles[k]); });
+      THEME = { tiles: tiles, accent: okHex(t.accent), page: t.page === "graphite" ? "graphite" : "" };
+    } catch (e) {}
+  }
+  function saveTheme() { try { localStorage.setItem(THEME_KEY, JSON.stringify(THEME)); } catch (e) {} }
+  function applyTheme() {
+    var st = document.documentElement.style;
+    if (THEME.accent) st.setProperty("--c-mustard", THEME.accent); else st.removeProperty("--c-mustard");
+    st.setProperty("--bg", THEME.page === "graphite" ? "#1c1c1e" : "#000");
+  }
+  function paintTile(el, hex) {
+    if (!el) return;
+    tintPairs("#000000").forEach(function (p) { el.style.removeProperty(p[0]); });
+    if (hex) { tintPairs(hex).forEach(function (p) { el.style.setProperty(p[0], p[1]); }); el.setAttribute("data-tinted", ""); } else el.removeAttribute("data-tinted");
+  }
+  function swatchRow(list, cur, attr) {
+    return list.map(function (c) { var on = cur === c[2]; return '<button type="button" ' + attr + '="' + c[2] + '" role="radio" aria-checked="' + on + '" aria-label="' + c[1] + '"><i style="background:' + c[2] + ";color:" + inkFor(c[2]) + '">' + icon("i-check") + "</i></button>"; }).join("");
+  }
+  var tintTarget = "";
+  function tintDlg() {
+    var d = document.getElementById("tintDlg"); if (d) return d;
+    d = document.createElement("dialog"); d.id = "tintDlg"; d.className = "tint-dlg"; d.setAttribute("aria-labelledby", "tintTitle");
+    d.innerHTML = '<div class="tint-grab" aria-hidden="true"></div><h2 id="tintTitle">Rang badlo</h2><p class="tint-sub" id="tintSub"></p>' +
+      '<div class="tint-sw" id="tintSw" role="radiogroup" aria-label="Colours"></div>' +
+      '<div class="tint-row"><label class="tint-pick"><span>Apna rang</span><input type="color" id="tintPick" value="#f2c14e"></label><button type="button" class="btn" id="tintReset">Reset</button></div>' +
+      '<div class="tint-row end"><button type="button" class="btn btn-primary" data-close>Done</button></div>';
+    document.body.appendChild(d);
+    d.addEventListener("click", function (e) {
+      if (e.target === d) { d.close(); return; }
+      var b = e.target.closest("[data-hex]"); if (b && tintTarget) { setTileTint(tintTarget, b.getAttribute("data-hex")); return; }
+      if (e.target.closest("#tintReset") && tintTarget) setTileTint(tintTarget, "");
+    });
+    d.querySelector("#tintPick").addEventListener("input", function (e) { var v = okHex(e.target.value); if (v && tintTarget) setTileTint(tintTarget, v); });
+    return d;
+  }
+  function openTint(id) {
+    tintTarget = id; var d = tintDlg(), cur = THEME.tiles[id] || "";
+    d.querySelector("#tintSub").textContent = TILE_NAMES[id] || "";
+    d.querySelector("#tintSw").innerHTML = swatchRow(PALETTE, cur, "data-hex");
+    d.querySelector("#tintPick").value = cur || "#f2c14e";
+    if (!d.open) d.showModal();
+  }
+  function setTileTint(id, hex) {
+    if (hex) THEME.tiles[id] = hex; else delete THEME.tiles[id];
+    saveTheme(); paintTile(document.querySelector('[data-tile="' + id + '"]'), hex);
+    var d = tintDlg(); d.querySelector("#tintSw").innerHTML = swatchRow(PALETTE, hex, "data-hex");
+    d.querySelector("#tintPick").value = hex || "#f2c14e";
+  }
+  function themeSection() {
+    var acc = THEME.accent || "#f2c14e", pg = THEME.page === "graphite";
+    return '<section class="panel" aria-labelledby="tcH"><h2 id="tcH">Theme rang</h2>' +
+      '<p>Har card ka rang uske palette button se badlo. Yahan app ka accent aur background.</p>' +
+      '<p class="tc-label">Accent</p><div class="tint-sw" role="radiogroup" aria-label="Accent colour">' + swatchRow(PALETTE, acc, "data-theme-accent") + '</div>' +
+      '<div class="tint-row"><label class="tint-pick"><span>Apna rang</span><input type="color" id="accentPick" value="' + acc + '"></label></div>' +
+      '<p class="tc-label">Background</p><div class="tc-seg" role="group" aria-label="Background">' +
+      '<button type="button" class="chip" data-theme-page="" aria-pressed="' + !pg + '">Black</button>' +
+      '<button type="button" class="chip" data-theme-page="graphite" aria-pressed="' + pg + '">Dark grey</button></div>' +
+      '<div class="actions"><button class="btn" type="button" data-theme-reset>Reset colours</button></div></section>';
+  }
+  function applyImportedTheme(t) {
+    var tiles = {}; Object.keys(t.tiles || {}).forEach(function (k) { if (TILE_NAMES[k] && okHex(t.tiles[k])) tiles[k] = okHex(t.tiles[k]); });
+    THEME = { tiles: tiles, accent: okHex(t.accent), page: t.page === "graphite" ? "graphite" : "" };
+    saveTheme(); applyTheme();
+  }
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-tint], [data-theme-accent], [data-theme-page], [data-theme-reset]"); if (!t) return;
+    e.preventDefault();
+    if (t.hasAttribute("data-tint")) { openTint(t.getAttribute("data-tint")); return; }
+    if (t.hasAttribute("data-theme-accent")) { THEME.accent = okHex(t.getAttribute("data-theme-accent")); }
+    else if (t.hasAttribute("data-theme-page")) { THEME.page = t.getAttribute("data-theme-page") === "graphite" ? "graphite" : ""; }
+    else { THEME = { tiles: {}, accent: "", page: "" }; toast("Rang default pe wapas"); }
+    saveTheme(); applyTheme(); render();
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target.id !== "accentPick") return;
+    var v = okHex(e.target.value); if (!v) return;
+    THEME.accent = v; saveTheme(); applyTheme();
+  });
+  document.addEventListener("change", function (e) { if (e.target.id === "accentPick") render(); });
   function viewDashboard() {
     var c = counts();
     var name = db.settings.displayName ? ", <em>" + esc(db.settings.displayName) + "</em>" : "";
@@ -464,14 +563,14 @@
     h += '<div class="masonry" data-f="' + f + '">';
     h += todayPlan();
     var stats = [["client", "Clients", "#/clients", "i-users"], ["video", "Videos", "#/youtube", "i-play"], ["note", "Notes", "#/notes", "i-note"], ["fav", "Starred", "#/favorites", "i-star"]];
-    h += '<div class="stats" data-k="notes clients books">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '">' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span></a>"; }).join("") + "</div>";
-    h += '<div class="more-links" data-k="books"><a class="more-link" href="#/books">' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span></a><a class="more-link" href="#/history">' + icon("i-history") + '<span><b>History</b><small>Sab kuch aur trash</small></span></a></div>';
+    h += '<div class="stats" data-k="notes clients books">' + stats.map(function (s) { return '<a class="stat t-' + s[0] + '" href="' + s[2] + '"' + tileAttr("stat-" + s[0]) + '>' + icon(s[3]) + '<span class="num">' + c[s[0]] + '</span><span class="lbl">' + s[1] + "</span>" + tintBtn("stat-" + s[0]) + "</a>"; }).join("") + "</div>";
+    h += '<div class="more-links" data-k="books"><a class="more-link" href="#/books"' + tileAttr("books") + '>' + icon("i-book") + '<span><b>Books</b><small>Tumhari PDF</small></span>' + tintBtn("books") + '</a><a class="more-link" href="#/history"' + tileAttr("history") + '>' + icon("i-history") + '<span><b>History</b><small>Sab kuch aur trash</small></span>' + tintBtn("history") + '</a></div>';
     var recent = db.items.filter(function (it) { return !it.archived; }).sort(function (a, b) { return b.updatedAt < a.updatedAt ? -1 : 1; }).slice(0, 7);
     var due = db.items.filter(function (it) { return it.type === "client" && it.deadline && ["lead", "active", "review"].indexOf(it.status) > -1; })
       .sort(function (a, b) { return a.deadline < b.deadline ? -1 : 1; }).slice(0, 4);
-    h += '<section class="mcard c-ink" data-k="notes" aria-labelledby="recentH"><div class="section-label"><h2 id="recentH">Recent</h2></div>';
+    h += '<section class="mcard c-ink" data-k="notes" aria-labelledby="recentH"' + tileAttr("recent") + '><div class="section-label"><h2 id="recentH">Recent</h2>' + tintBtn("recent") + '</div>';
     h += recent.length ? '<div class="list">' + recent.map(function (it) { return listItem(it, false); }).join("") + "</div>" : emptyBox("Nothing here yet", "Capture your first note above.", null);
-    h += '</section><section class="mcard c-ink" data-k="clients cal" aria-labelledby="dueH"><div class="section-label"><h2 id="dueH">Upcoming deadlines</h2><a href="#/clients">All clients</a></div>';
+    h += '</section><section class="mcard c-ink" data-k="clients cal" aria-labelledby="dueH"' + tileAttr("due") + '><div class="section-label"><h2 id="dueH">Upcoming deadlines</h2><a href="#/clients">All clients</a>' + tintBtn("due") + '</div>';
     h += due.length ? '<div class="list">' + due.map(function (it) { return listItem(it, true); }).join("") + "</div>" : emptyBox("No open deadlines", "Client jobs with a deadline show up here.", null);
     h += "</section></div>";
     return h;
@@ -486,7 +585,7 @@
       .sort(function (a, b) { return a.deadline < b.deadline ? -1 : 1; });
     var pend = db.items.filter(function (it) { return it.type === "income" && it.status === "pending" && (!it.date || daysUntil(it.date) <= 3); })
       .sort(function (a, b) { return (a.date || "") < (b.date || "") ? -1 : 1; });
-    var h = '<section class="panel plan mcard c-mustard" data-k="cal paisa clients" aria-labelledby="planH"><div class="plan-head"><h2 id="planH">Aaj ka plan</h2><a href="#/calendar">Calendar</a></div>';
+    var h = '<section class="panel plan mcard c-mustard" data-k="cal paisa clients" aria-labelledby="planH"' + tileAttr("plan", THEME.accent) + '><div class="plan-head"><h2 id="planH">Aaj ka plan</h2><a href="#/calendar">Calendar</a>' + tintBtn("plan") + '</div>';
     if (!posts.length && !due.length && !pend.length) h += '<p class="plan-empty">Aaj sab clear hai ✨ Koi post, deadline ya payment pending nahi.</p>';
     if (posts.length) {
       h += '<div class="plan-group"><p class="plan-label">' + icon("i-cal") + "Aaj post karna hai</p>";
@@ -628,7 +727,8 @@
     var raw = String(it.body || "").slice(0, 600), title = (it.title || "").trim(), lines = raw.split("\n");
     if (!title) { while (lines.length && !lines[0].trim()) lines.shift(); title = mdPlain(lines.shift() || "").trim().slice(0, 120) || "Untitled"; }
     var ex = mdPlain(lines.join("\n")).trim();
-    var h = '<article class="card ncard' + (it.color ? " nc-" + esc(it.color) : "") + '" aria-label="' + esc("Note: " + title) + '">';
+    var nh = okHex(it.tint);
+    var h = '<article class="card ncard' + (nh ? " nc-custom" : it.color ? " nc-" + esc(it.color) : "") + '"' + (nh ? ' style="' + tintCss(nh) + '"' : "") + ' aria-label="' + esc("Note: " + title) + '">';
     if (it.pinned) h += '<span class="n-pin" role="img" aria-label="Pinned">' + icon("i-pin") + "</span>";
     h += '<h3><button type="button" data-open="' + esc(it.id) + '">' + esc(title) + "</button></h3>";
     if (ex) h += '<p class="excerpt">' + esc(ex) + "</p>";
@@ -685,6 +785,7 @@
       '<div class="field"><label for="sName">Display name</label><input class="input" id="sName" maxlength="40" value="' + esc(db.settings.displayName) + '" placeholder="Your name"></div>' +
       '<div class="field"><label for="sStudio">Studio name</label><input class="input" id="sStudio" maxlength="60" value="' + esc(db.settings.studioName) + '" placeholder="Your studio"></div>' +
       '<span class="saved-note" id="savedNote" aria-live="polite">Saved</span></section>';
+    h += themeSection();
     h += '<section class="panel" aria-labelledby="iH"><h2 id="iH">Install on your phone</h2>' +
       '<p>Open this page in Chrome on Android, tap <b>⋮</b> → <b>Add to Home screen</b> (or <b>Install app</b>). Bhavnote then opens full-screen from its own icon and works offline.</p>' +
       '<div class="actions"><button class="btn" type="button" id="installBtn" hidden>' + icon("i-phone") + "Install Bhavnote</button></div></section>";
@@ -703,6 +804,7 @@
   function exportData() {
     var go = function (media) {
       var data = { app: "bhavnote", schema: SCHEMA, exportedAt: now(), settings: db.settings, items: db.items };
+      data.theme = { tiles: THEME.tiles, accent: THEME.accent, page: THEME.page };
       if (media && Object.keys(media).length) data.media = media;
       var json = JSON.stringify(data, null, 2), fname = "bhavnote-backup-" + ymd(new Date()) + ".json";
       if (window.BhavnoteAndroid && window.BhavnoteAndroid.saveFile) {
@@ -731,6 +833,7 @@
           var map = {}; db.items.forEach(function (i) { map[i.id] = i; });
           items.forEach(function (i) { var ex = map[i.id]; if (!ex) db.items.push(i); else if ((i.updatedAt || "") > (ex.updatedAt || "")) Object.assign(ex, i); });
         }
+        if (data.theme && typeof data.theme === "object") applyImportedTheme(data.theme);
         if (data.media && window.BNEditor && window.BNEditor.importMedia) window.BNEditor.importMedia(data.media);
         quietly(save); logEvent("import", "settings", (mode === "replace" ? "Backup se replace kiya: " : "Backup merge kiya: ") + items.length + " entries"); render(); toast((mode === "replace" ? "Replaced with " : "Merged ") + items.length + " entries");
       });
@@ -1057,6 +1160,7 @@
 
   /* ---------------- boot ---------------- */
   window.BN = {
+    okHex: okHex, tintPairs: tintPairs, inkFor: inkFor, PALETTE: PALETTE,
     get db() { return db; }, KEY: KEY, TYPES: TYPES, PLATFORMS: PLATFORMS, PLATFORM_LABEL: PLATFORM_LABEL, PAY_MODES: PAY_MODES, VIEWS: VIEWS, ui: ui,
     $: $, $$: $$, esc: esc, icon: icon, cap: cap, uid: uid, now: now, ymd: ymd, addDays: addDays, daysUntil: daysUntil, fmtDate: fmtDate, INR: INR,
     parseTags: parseTags, titleOf: titleOf, bodyOf: bodyOf, ago: ago, byId: byId, save: save, render: render, toast: toast, confirmBox: confirmBox,
@@ -1067,6 +1171,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     try { localStorage.removeItem("bhavnote.ai"); } catch (e) {} /* leftover key from the removed helper */
     db = load();
+    loadTheme(); applyTheme();
     snapAll();
     render();
     setTimeout(pruneHistory, 3000);

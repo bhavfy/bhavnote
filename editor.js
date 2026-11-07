@@ -248,6 +248,7 @@
         it.title = c.title; it.body = c.body; it.updatedAt = B.now(); delete it.sample;
         if (S.mode === "list") { it.mode = "list"; it.list = S.list.filter(function (x) { return (x.t || "").trim(); }); } else { delete it.mode; delete it.list; }
         if (S.color) it.color = S.color; else delete it.color;
+        if (S.tint) it.tint = S.tint; else delete it.tint;
         if (S.pinned) it.pinned = true; else delete it.pinned;
         if (S.archived) it.archived = true; else delete it.archived;
         it.kind = S.kind; it.tags = S.tags; it.link = S.link || ""; it.fav = !!S.fav;
@@ -264,12 +265,17 @@
   /* ---------- open / close ---------- */
   function setTheme(on) {
     var m = $('meta[name="theme-color"]'); if (!m) return;
-    if (on) { if (m.getAttribute("data-was") == null) m.setAttribute("data-was", m.getAttribute("content") || "#000000"); m.setAttribute("content", THEME[S.color || ""] || "#000000"); }
+    if (on) { if (m.getAttribute("data-was") == null) m.setAttribute("data-was", m.getAttribute("content") || "#000000"); m.setAttribute("content", S.tint || THEME[S.color || ""] || "#000000"); }
     else if (m.getAttribute("data-was") != null) { m.setAttribute("content", m.getAttribute("data-was")); m.removeAttribute("data-was"); }
   }
+  var TINT_PROPS = ["--nc", "--text", "--muted", "--faint", "--ink-on", "--ink-on2", "--tt", "--tt2", "--tile"];
   function applyColor() {
     COLORS.forEach(function (c) { if (c[0]) ed.classList.remove("nc-" + c[0]); });
-    if (S.color) ed.classList.add("nc-" + S.color);
+    ed.classList.remove("nc-custom");
+    TINT_PROPS.forEach(function (p) { ed.style.removeProperty(p); });
+    var hex = B.okHex(S.tint);
+    if (hex) { ed.classList.add("nc-custom"); B.tintPairs(hex).forEach(function (p) { ed.style.setProperty(p[0], p[1]); }); }
+    else if (S.color) ed.classList.add("nc-" + S.color);
     setTheme(true);
   }
   function applyFlags() {
@@ -285,7 +291,7 @@
   function open(id, preset) {
     build(); if (S) closeNow(true);
     var it = id ? B.byId(id) : null; preset = preset || {};
-    S = { it: it, mode: it && it.mode === "list" && Array.isArray(it.list) ? "list" : "text", list: [], color: it ? it.color || "" : preset.color || "", pinned: !!(it && it.pinned), archived: !!(it && it.archived),
+    S = { it: it, mode: it && it.mode === "list" && Array.isArray(it.list) ? "list" : "text", list: [], color: it ? it.color || "" : preset.color || "", tint: it ? B.okHex(it.tint) : "", pinned: !!(it && it.pinned), archived: !!(it && it.archived),
       kind: it ? it.kind || "note" : preset.kind || "note", tags: it ? (it.tags || []).slice() : (preset.tags || []).slice(), link: it ? it.link || "" : preset.link || "", fav: !!(it && it.fav), media: it ? (it.media || []).slice() : [],
       dirty: false, needsLog: false, scrollY: window.scrollY, route: B.ui.route };
     if (S.mode === "list") S.list = it.list.map(function (x) { return { t: String(x.t || ""), d: !!x.d }; });
@@ -350,11 +356,24 @@
   function sheetPlus() {
     openSheet('<p class="ne-sh">Add</p>' + row("togglelist", "i-checkbox", S.mode === "list" ? "Hide checkboxes (plain text)" : "Checklist") + row("photo", "i-camera", "Take photo") + row("image", "i-image", "Add image") + row("voice", "i-mic", "Voice note") + row("details", "i-link", "Link, labels & tags"));
   }
+  var LEGACY_HEX = { graphite: "#2c2c2e", slate: "#1d2733", teal: "#17302f", moss: "#1f2e22", sand: "#342b1b", wine: "#36212b", plum: "#2b2339" };
   function sheetColor() {
-    openSheet('<p class="ne-sh">Background</p><div class="ne-swatches" role="radiogroup" aria-label="Background colour">' + COLORS.map(function (c) {
-      return '<button type="button" class="ne-sw' + (S.color === c[0] ? " sel" : "") + '" data-ne="setcolor" data-c="' + c[0] + '" role="radio" aria-checked="' + (S.color === c[0]) + '" aria-label="' + c[1] + '"><i class="sw ' + (c[0] ? "nc-" + c[0] : "nc-default") + '">' + icon("i-check") + "</i><span>" + c[1] + "</span></button>";
-    }).join("") + "</div>");
+    var cur = B.okHex(S.tint), legacy = !cur && S.color && LEGACY_HEX[S.color] ? S.color : "";
+    var sw = function (hex, name, on, attr) { return '<button type="button" class="ne-sw' + (on ? " sel" : "") + '" ' + attr + ' role="radio" aria-checked="' + on + '" aria-label="' + name + '"><i class="sw" style="background:' + hex + ";color:" + B.inkFor(hex) + '">' + icon("i-check") + "</i><span>" + name + "</span></button>"; };
+    var h = '<p class="ne-sh">Background</p><div class="ne-swatches" role="radiogroup" aria-label="Background colour">';
+    h += sw("#f5efe2", "Default", !cur && !legacy, 'data-ne="setcolor" data-c=""');
+    if (legacy) h += sw(LEGACY_HEX[legacy], B.cap(legacy), true, 'data-ne="setcolor" data-c=""');
+    B.PALETTE.forEach(function (c) { h += sw(c[2], c[1], cur === c[2], 'data-ne="setpalette" data-c="' + c[2] + '"'); });
+    h += '</div><div class="ne-pickrow"><label class="ne-pick"><span>Apna rang</span><input type="color" id="nePick" value="' + (cur || "#f2c14e") + '"></label>' +
+      '<button type="button" class="ne-reset" data-ne="setcolor" data-c="">Reset</button></div>';
+    openSheet(h);
+    var pick = els.sheet.querySelector("#nePick");
+    if (pick) pick.addEventListener("input", function () {
+      var v = B.okHex(pick.value); if (!v || !S) return;
+      S.tint = v; S.color = ""; applyColor(); touch(); markSw(null);
+    });
   }
+  function markSw(on) { $$(".ne-sw", els.sheet).forEach(function (x) { var y = x === on; x.classList.toggle("sel", y); x.setAttribute("aria-checked", y); }); }
   function sheetMore() {
     openSheet('<p class="ne-sh">More</p>' + row("delete", "i-trash", "Delete", { danger: true }) + row("dup", "i-dup", "Make a copy") + row("copy", "i-copy", "Copy text") + row("share", "i-share", "Share") +
       row("fav", "i-star", S.fav ? "Remove from favorites" : "Add to favorites") + row("preview", "i-eye", S.preview ? "Back to editing" : "Formatted preview") + row("plan", "i-cal", "Make a Content plan from this note") + row("details", "i-tag", "Link, labels & tags"), "scroll");
@@ -389,7 +408,8 @@
       case "f-ol": linePrefix("ol"); break;
       case "togglelist": closeSheet(); toggleList(); break;
       case "details": sheetDetails(); break;
-      case "setcolor": S.color = b.getAttribute("data-c") || ""; applyColor(); touch(); $$(".ne-sw", els.sheet).forEach(function (x) { var on = x === b; x.classList.toggle("sel", on); x.setAttribute("aria-checked", on); }); break;
+      case "setcolor": S.color = ""; S.tint = ""; applyColor(); touch(); markSw(b); break;
+      case "setpalette": S.color = ""; S.tint = B.okHex(b.getAttribute("data-c")); applyColor(); touch(); markSw(b); break;
       case "cb": var i = +b.closest(".ne-ri").getAttribute("data-i"); pushHist(); S.list[i].d = !S.list[i].d; renderList(); touch(); pushHist(); break;
       case "rm": var j = +b.closest(".ne-ri").getAttribute("data-i"); pushHist(); S.list.splice(j, 1); if (!S.list.length) S.list.push({ t: "", d: false }); renderList(); touch(); pushHist(); break;
       case "addrow": pushHist(); S.list.push({ t: "", d: false }); renderList(S.list.length - 1); touch(); break;
